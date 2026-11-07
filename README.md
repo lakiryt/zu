@@ -81,5 +81,6 @@ npm run build                                         # エディタを editor/d
 | `state.ts` | `Editor`。文字(正本)、読んだ結果、選んでいるもの、履歴。変化を各欄に知らせる |
 | `canvas.ts` / `panel.ts` / `toolbar.ts` | 図の欄(選ぶ、ドラッグ)、右の欄、上の道具 |
 | `actions.ts` | 欄をまたいで使う操作(図形を足す、線を引く、揃える、消す、動かす) |
+| `about.ts` | 「Law図 について」の窓の開け閉めと例の図。本文は `index.html` に書く |
 | `edit.ts` / `relocate.ts` / `snap.ts` | 文字の書き換え、ほかの図形を動かさない付け替え、吸着先の計算。DOM を使わない |
 | `index.html` / `style.css` / `public/` | ページ、見た目、ロゴと共有用の画像。検索と共有の情報は `index.html` に書き、公開先の URL は `vite.config.ts` が差し込む |

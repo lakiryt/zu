@@ -46,8 +46,10 @@
   <body>
     <header>
       <h1 class="brand">
-        <img src="/favicon.svg" alt="" width="24" height="24" />
-        <span class="name">Law<span class="zu">図</span></span>
+        <button type="button" class="about-open" aria-haspopup="dialog" title="Law図 について">
+          <img src="/favicon.svg" alt="" width="24" height="24" />
+          <span class="name">Law<span class="zu">図</span></span>
+        </button>
         <span class="tagline">文字で書いて、図にする</span>
       </h1>
       <div id="toolbar"></div>
@@ -69,6 +71,66 @@
       </section>
       <aside id="panel"></aside>
     </main>
+    <!-- Law図 について。ロゴか右の欄の案内から開く。本文はここに書き、検索エンジンにも読ませる -->
+    <dialog id="about" aria-labelledby="about-title">
+      <article tabindex="-1" autofocus>
+        <header>
+          <h2 id="about-title"><span>Law<span class="zu">図</span></span><small>ローズ</small></h2>
+          <button type="button" class="about-close" aria-label="閉じる">×</button>
+        </header>
+        <p class="lead">
+          図を文字で書くエディタです。「代理人は本人の下」「本人から代理人へ矢印」のように図形どうしの関係を書くと、図になります。座標や大きさを決めなくても、ラベルの長さに合わせて間を空けます。
+        </p>
+        <figure class="example">
+          <pre id="about-example">text a "本人(A)"
+text c "相手方(C)" right of a
+text b "代理人(B)" below a
+a ---&gt; b "代理権の授与"
+b &lt;-.-&gt; c "意思表示"
+a ===&gt;&gt; c "効果帰属"</pre>
+          <div class="result" aria-label="上の文字から描いた図"></div>
+        </figure>
+
+        <h3>使い方</h3>
+        <ul>
+          <li>左に文字を書くと、右の図が変わります。</li>
+          <li>図形をドラッグして、ほかの図形の上下左右に寄せて置けます。置き方は文字に書き戻されます。</li>
+          <li>Shift を押しながら選ぶと、いくつも選べます。選んだ図形の段や列を揃えたり、線でつないだりできます。</li>
+          <li>書いたものは .zu(文字)と SVG(図)で保存できます。SVG はほかの文書や Web ページにそのまま貼れます。</li>
+        </ul>
+
+        <h3>書き方の早見</h3>
+        <dl class="cheats">
+          <dt><code>text a "本人"</code></dt>
+          <dd>図形を置く。<code>text</code> は枠のない文字、ほかに <code>parallelogram</code>(平行四辺形)と <code>cube</code>(立方体)</dd>
+          <dt><code>below a</code></dt>
+          <dd>a の下に置く。<code>above</code>、<code>left of</code>、<code>right of</code> も。何も書かなければ直前の図形の右</dd>
+          <dt><code>align row b c</code></dt>
+          <dd>b と c を同じ高さに揃える。<code>column</code> なら左右の位置を揃える</dd>
+          <dt><code>a --- b</code></dt>
+          <dd>線を引く。<code>-.-</code> は点線、<code>===</code> は二重線</dd>
+          <dt><code>a ---&gt; b "ラベル"</code></dt>
+          <dd>端の印とラベル。<code>&gt;</code> は矢印、<code>&gt;&gt;</code> は塗った矢印、<code>o</code> は丸。両端に付けてもよい</dd>
+          <dt><code>%% メモ</code></dt>
+          <dd>コメント</dd>
+        </dl>
+
+        <h3>書いたものの行方</h3>
+        <p>
+          書いた文字はこのブラウザの中にだけ保存され、どこにも送られません。別の端末やブラウザで続けるときは「.zu を保存」で書き出し、「開く」で読み込んでください。
+        </p>
+
+        <h3>名前</h3>
+        <p>
+          Law図 は「ローズ」と読みます。法律の関係図を描きたくて作り始めましたが、図形の名前は分野に寄せていないので、ほかの図にも使えます。書くための言語の名前は zu、ファイルの拡張子は .zu です。
+        </p>
+
+        <footer>
+          <a href="https://github.com/lakiryt/zu" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/lakiryt/zu/blob/master/SPEC.md" target="_blank" rel="noopener">言語の仕様</a>
+        </footer>
+      </article>
+    </dialog>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

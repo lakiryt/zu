@@ -1,6 +1,7 @@
 // 右の欄。選んでいる図形や線の中身を見せ、変えられるようにする
 import { HEADS, LINE_STYLES, SHAPES } from "../src/index.ts";
 import type { Document, LineStatement, Shape, ShapeStatement } from "../src/index.ts";
+import { openAbout } from "./about.ts";
 import { align, removeSelected, setPlacement } from "./actions.ts";
 import { button, choice, html, numberField } from "./dom.ts";
 import * as edit from "./edit.ts";
@@ -52,6 +53,7 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
     panel.append(
       html("p", { class: "muted" }, "図形を選ぶと、ここで編集できます。"),
       html("ul", { class: "help" }, ...HELP.map((line) => html("li", {}, line))),
+      button("Law図 について", openAbout, { class: "link" }),
     );
   }
 

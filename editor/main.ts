@@ -1,6 +1,7 @@
 // エディタの入口。画面の各欄を作り、Editor の変化をつなぐ。
 // 正本は左の .zu の文字で、図やパネルの操作は文字を書き換えてから描き直す
 import SAMPLE from "../examples/agency.zu?raw";
+import { setUpAbout } from "./about.ts";
 import { removeSelected } from "./actions.ts";
 import { createCanvas } from "./canvas.ts";
 import { element } from "./dom.ts";
@@ -91,6 +92,8 @@ fileInput.addEventListener("change", async () => {
 
 document.addEventListener("keydown", (event) => {
   if ((event.target as HTMLElement).closest("textarea, input, select")) return;
+  // 「Law図 について」を開いている間は、裏の図を操作しない(Esc は窓を閉じるだけにする)
+  if (document.querySelector("dialog[open]")) return;
   const mod = event.ctrlKey || event.metaKey;
   const key = event.key.toLowerCase();
   if (mod && key === "z") {
@@ -110,4 +113,5 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+setUpAbout();
 editor.reload();
