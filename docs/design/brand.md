@@ -10,7 +10,11 @@
 
 `.zu` を使う言語に Zimbu(Bram Moolenaar の言語、2009年ごろから。更新は止まっている)がある。Zura という言語もあるらしいが、確かめていない。どちらも広く使われてはいないので、`.zu` のままにした。
 
-ただし GitHub の言語判定(linguist)は、`.zu` を Zimbu として数える。リポジトリの言語の内訳に Zimbu と出たり、色付けが Zimbu のものになったりする。気になれば `.gitattributes` に `*.zu linguist-language=Text`(または `linguist-detectable=false`)を書けば外せる。今は書いていない。
+GitHub の言語判定(linguist、https://github.com/github-linguist/linguist の `lib/linguist/languages.yml`)には、Zimbu も `.zu` も載っていない(2026-11-08 に v4.0.0、v5〜v9.2 と今の main で確かめた)。GitHub では `.zu` はどの言語にも数えられず、色付けもされない。
+
+GitHub で色付けや言語の内訳に載せるには linguist に言語を足す必要があり、それには多くのリポジトリで使われていることが求められる。今は考えない。
+
+なお、ほかの拡張子の案も linguist ではどれも空いていた(`.zuz`、`.lawz`、`.rose`、`.roz`、`.lz`、`.rz` など)。ただし GitHub の外では、`.lz` は lzip、`.rz` は rzip という圧縮の形式で、`.zul` は ZK(Java の画面の部品)の書式。
 
 ## ロゴ
 
