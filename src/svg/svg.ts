@@ -95,10 +95,11 @@ function draw({ label: text, box, geometry }: PlacedShape) {
   }
 }
 
-// 線の太さ、点線の間隔、矢先の大きさ。太線は矢先も大きくする
-const STROKE_WIDTH = { solid: 1.5, dotted: 1.5, thick: 3 };
+// 線の太さ、点線の間隔、二重線の2本の中心どうしの間、矢先の大きさ。二重線は矢先を少し大きくし、2本を覆う
+const STROKE_WIDTH = { solid: 1.5, dotted: 1.5, double: 1.2 };
 const DASH = "2 4";
-const HEAD = { length: 12, width: 10, radius: 4, thickScale: 1.35 };
+const DOUBLE_GAP = 3.5;
+const HEAD = { length: 12, width: 10, radius: 4, doubleScale: 1.35 };
 
 type Vector = { x: number; y: number };
 
@@ -131,18 +132,25 @@ function drawLine({ start, end, arrow, label: text, labelBox }: PlacedLine) {
   const parts: string[] = [];
   if (length > 0) {
     const u = { x: (end.x - start.x) / length, y: (end.y - start.y) / length };
-    const scale = arrow.style === "thick" ? HEAD.thickScale : 1;
+    const scale = arrow.style === "double" ? HEAD.doubleScale : 1;
     const atEnd = head(arrow.end, end, u, scale);
     const atStart = head(arrow.start, start, { x: -u.x, y: -u.y }, scale);
     // 矢先の中に線が見えないよう、線は矢先の根元で止める
     const from = { x: start.x + u.x * atStart.back, y: start.y + u.y * atStart.back };
     const to = { x: end.x - u.x * atEnd.back, y: end.y - u.y * atEnd.back };
     const dash = arrow.style === "dotted" ? ` stroke-dasharray="${DASH}"` : "";
-    parts.push(
-      `<line x1="${round(from.x)}" y1="${round(from.y)}" x2="${round(to.x)}" y2="${round(to.y)}" stroke="${STROKE}" stroke-width="${STROKE_WIDTH[arrow.style]}"${dash} stroke-linecap="round"/>`,
-      atStart.svg,
-      atEnd.svg,
-    );
+    // 二重線は、線の向きに直交する向きへ半分ずつずらした2本で描く。端が丸まって2本がつながらないよう、端は切りっぱなし
+    const n = { x: -u.y, y: u.x };
+    const offsets = arrow.style === "double" ? [DOUBLE_GAP / 2, -DOUBLE_GAP / 2] : [0];
+    const cap = arrow.style === "double" ? "butt" : "round";
+    for (const offset of offsets) {
+      const dx = n.x * offset;
+      const dy = n.y * offset;
+      parts.push(
+        `<line x1="${round(from.x + dx)}" y1="${round(from.y + dy)}" x2="${round(to.x + dx)}" y2="${round(to.y + dy)}" stroke="${STROKE}" stroke-width="${STROKE_WIDTH[arrow.style]}"${dash} stroke-linecap="${cap}"/>`,
+      );
+    }
+    parts.push(atStart.svg, atEnd.svg);
   }
   if (text !== null && labelBox) {
     const { x, y, width, height } = labelBox;

@@ -168,7 +168,9 @@ test("the svg draws line styles and heads", () => {
   const line = (index: number) => svg.match(new RegExp(`<g data-line="${index}">(.*?)</g>`))?.[1] ?? "";
   assert.match(line(0), /stroke-dasharray/);
   assert.match(line(0), /<polygon[^>]*fill="#333333"/);
-  assert.match(line(1), /stroke-width="3"/);
+  // 二重線は2本の線で描く
+  assert.equal(line(1).match(/<line /g)?.length, 2);
+  assert.equal(line(0).match(/<line /g)?.length, 1);
   assert.match(line(1), /<circle/);
   assert.match(line(2), /<polygon[^>]*fill="#ffffff"/);
   // 線は図形より先に(下に)描く

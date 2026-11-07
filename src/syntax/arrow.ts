@@ -15,11 +15,11 @@ export function readArrow(text: string): Arrow | null {
   const match = PATTERN.exec(text);
   if (!match) return null;
   const [, start = "", body = "", end = ""] = match;
-  const style: LineStyle = body.startsWith("=") ? "thick" : body.includes(".") ? "dotted" : "solid";
+  const style: LineStyle = body.startsWith("=") ? "double" : body.includes(".") ? "dotted" : "solid";
   return { style, start: START[start]!, end: END[end]! };
 }
 
-const BODY: Record<LineStyle, string> = { solid: "---", dotted: "-.-", thick: "===" };
+const BODY: Record<LineStyle, string> = { solid: "---", dotted: "-.-", double: "===" };
 const START_TEXT: Record<Head, string> = { none: "", open: "<", filled: "<<", dot: "o" };
 const END_TEXT: Record<Head, string> = { none: "", open: ">", filled: ">>", dot: "o" };
 

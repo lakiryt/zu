@@ -38,8 +38,8 @@ export type AlignStatement = {
   end: SourcePosition;
 };
 
-// 線の種類。solid は ---、dotted は -.-、thick は ===
-export const LINE_STYLES = ["solid", "dotted", "thick"] as const;
+// 線の種類。solid は ---、dotted は -.-、double は ===(二重線)
+export const LINE_STYLES = ["solid", "dotted", "double"] as const;
 export type LineStyle = (typeof LINE_STYLES)[number];
 
 // 線の端。open は塗りつぶさない三角(>)、filled は塗りつぶした三角(>>)、dot は塗りつぶした丸(o)

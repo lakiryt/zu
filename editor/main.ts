@@ -476,7 +476,7 @@ function numberField(label: string, value: number | null, placeholder: string, o
   return html("label", { class: "field" }, label, input);
 }
 
-const STYLE_NAMES: Record<LineStyle, string> = { solid: "実線", dotted: "点線", thick: "太線" };
+const STYLE_NAMES: Record<LineStyle, string> = { solid: "実線", dotted: "点線", double: "二重線" };
 const HEAD_NAMES: Record<Head, string> = { none: "なし", open: "矢印(白抜き)", filled: "矢印(塗りつぶし)", dot: "丸" };
 
 function choice<T extends string>(label: string, options: readonly T[], names: Record<T, string>, value: T, onChange: (value: T) => void) {

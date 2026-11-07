@@ -133,7 +133,7 @@ test("arrows are read as one token and turned into style and heads", () => {
   assert.deepEqual(arrows("a --- b\na -.-> b\na ===>> b\na <---o b\na o-..-o b\na -- b"), [
     { style: "solid", start: "none", end: "none" },
     { style: "dotted", start: "none", end: "open" },
-    { style: "thick", start: "none", end: "filled" },
+    { style: "double", start: "none", end: "filled" },
     { style: "solid", start: "open", end: "dot" },
     { style: "dotted", start: "dot", end: "dot" },
     { style: "solid", start: "none", end: "none" },
