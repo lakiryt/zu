@@ -1,6 +1,6 @@
 // .zu の文字を、文の単位で書き換える。DOM を知らないので Node でも試せる
 import { print } from "../src/syntax/print.ts";
-import type { Document, ShapeStatement, SourcePosition, Statement } from "../src/syntax/ast.ts";
+import type { Arrow, Document, LineStatement, ShapeStatement, SourcePosition, Statement } from "../src/syntax/ast.ts";
 
 // 行と列(1から、字は code point で数える)を文字列の添字にする
 export function offsetOf(text: string, { line, column }: SourcePosition) {
@@ -90,12 +90,17 @@ export function dependents(document: Document, id: string) {
   return result;
 }
 
-// 名前を変え、参照している置き方と揃えも書き換える
+// 名前を変え、参照している置き方、揃え、線も書き換える
 export function rename(text: string, document: Document, from: string, to: string) {
   return rewrite(text, document, (statement) => {
     if (statement.kind === "align") {
       if (!statement.members.some(({ id }) => id === from)) return undefined;
       return { ...statement, members: statement.members.map((m) => (m.id === from ? { ...m, id: to } : m)) };
+    }
+    if (statement.kind === "line") {
+      if (statement.from.id !== from && statement.to.id !== from) return undefined;
+      const swap = (end: LineStatement["from"]) => (end.id === from ? { ...end, id: to } : end);
+      return { ...statement, from: swap(statement.from), to: swap(statement.to) };
     }
     const own = statement.id === from;
     const refers = statement.placement?.kind === "beside" && statement.placement.of === from;
@@ -139,4 +144,28 @@ export function leaveAlign(text: string, document: Document, axis: "row" | "colu
 // 文字の位置(行)にある図形の名前
 export function shapeAtLine(document: Document, line: number) {
   return shapes(document).find((statement) => statement.at.line === line)?.id ?? null;
+}
+
+// --- 線 ---
+
+export function lines(document: Document) {
+  return document.statements.filter((statement) => statement.kind === "line");
+}
+
+// 線は名前を持たないので、書いた順の番号で指す(図の data-line と同じ番号)
+export function addLine(text: string, from: string, to: string) {
+  const at = { line: 0, column: 0 };
+  const arrow: Arrow = { style: "solid", start: "none", end: "none" };
+  return append(text, { kind: "line", from: { id: from, at }, to: { id: to, at }, arrow, label: null, at, end: at });
+}
+
+export function replaceLine(text: string, document: Document, index: number, next: LineStatement | null) {
+  const target = lines(document)[index];
+  return rewrite(text, document, (statement) => (statement === target ? next : undefined));
+}
+
+// 文字の位置(行)にある線の番号
+export function lineAtLine(document: Document, line: number) {
+  const index = lines(document).findIndex((statement) => statement.at.line === line);
+  return index === -1 ? null : index;
 }

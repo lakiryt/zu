@@ -2,7 +2,7 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "lib": ["es2024", "dom", "dom.iterable"],
-    "types": []
+    "types": ["vite/client"]
   },
   "include": ["./*.ts", "../src"]
 }

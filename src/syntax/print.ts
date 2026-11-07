@@ -1,5 +1,6 @@
 // 文を zu の文字に戻す。parse の逆で、エディタが文を書き換えるときに使う。
 // 書き方の揺れ(of の有無、数の間の「,」)は一つの形にそろえる
+import { writeArrow } from "./arrow.ts";
 import type { Placement, Statement } from "./ast.ts";
 
 const ESCAPED: Record<string, string> = { '"': '\\"', "\\": "\\\\", "\n": "\\n" };
@@ -20,6 +21,10 @@ export function printPlacement(placement: Placement) {
 }
 
 export function print(statement: Statement) {
+  if (statement.kind === "line") {
+    const label = statement.label === null ? "" : ` ${quote(statement.label)}`;
+    return `${statement.from.id} ${writeArrow(statement.arrow)} ${statement.to.id}${label}`;
+  }
   if (statement.kind === "align") {
     return ["align", statement.axis, ...statement.members.map(({ id }) => id)].join(" ");
   }

@@ -10,3 +10,9 @@ cube small "指輪" size 36
 
 %% 代理人と土地を同じ段に揃える
 align row b land
+
+%% 三者の関係
+a ---> b "代理権の授与"
+b <-.-> c "意思表示"
+a ===>> c "効果帰属"
+c ---o land

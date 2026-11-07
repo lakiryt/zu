@@ -185,3 +185,15 @@ test("removing a shape leaves the others where they were, or close by without nu
   assert.equal(shorter.trim().split("\n").length, 2);
   assertNearby(chain, shorter, "c", "a");
 });
+
+test("lines follow renames and disappear with their shapes", () => {
+  const text = "text a\ntext b below a\na ---> b \"x\"\n";
+  assert.equal(edit.rename(text, parse(text), "b", "代理人"), 'text a\ntext 代理人 below of a\na ---> 代理人 "x"\n');
+  assert.doesNotMatch(removeShape(text, "b"), /--->/);
+  const added = edit.addLine(text, "b", "a");
+  assert.match(added, /^b --- a$/m);
+  const document = parse(added);
+  const changed = edit.replaceLine(added, document, 1, { ...edit.lines(document)[1]!, arrow: { style: "dotted", start: "dot", end: "filled" } });
+  assert.match(changed, /^b o-.->> a$/m);
+  assert.equal(edit.lineAtLine(document, 3), 0);
+});

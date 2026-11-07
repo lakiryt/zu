@@ -1,7 +1,8 @@
 import { ZuError } from "../errors.ts";
+import { isArrow } from "./arrow.ts";
 import type { SourcePosition } from "./ast.ts";
 
-export type TokenType = "word" | "string" | "number" | "comma" | "newline" | "eof";
+export type TokenType = "word" | "string" | "number" | "comma" | "arrow" | "newline" | "eof";
 
 // end は字句の直後の位置。エディタが文の範囲を書き換えるのに使う
 export type Token = { type: TokenType; value: string; at: SourcePosition; end: SourcePosition };
@@ -9,6 +10,8 @@ export type Token = { type: TokenType; value: string; at: SourcePosition; end: S
 const WORD_START = /[\p{L}_]/u;
 const WORD_PART = /[\p{L}\p{N}_-]/u;
 const DIGIT = /[0-9]/;
+// 線の記号は空白、引用符、「,」、コメントで区切る
+const ARROW_PART = /[^\s",%]/u;
 const ESCAPES: Record<string, string> = { '"': '"', "\\": "\\", n: "\n" };
 
 // 文字列を語、文字列、数、区切りに分ける。コメントと空白は捨て、改行は文の区切りとして残す
@@ -37,15 +40,27 @@ export function tokenize(source: string): Token[] {
     return text;
   };
 
+  // 今の位置から区切りまでが線の記号なら、その長さ
+  const arrowLength = () => {
+    let length = 0;
+    while (peek(length) !== undefined && ARROW_PART.test(peek(length)!)) length += 1;
+    return length > 0 && isArrow(chars.slice(index, index + length).join("")) ? length : 0;
+  };
+
   while (index < chars.length) {
     const char = peek()!;
     const at = here();
+    const arrow = "-=<o".includes(char) ? arrowLength() : 0;
 
     if (char === " " || char === "\t") {
       advance();
     } else if (char === "\n") {
       advance();
       tokens.push({ type: "newline", value: "\n", at, end: here() });
+    } else if (arrow > 0) {
+      let value = "";
+      for (let n = 0; n < arrow; n++) value += advance();
+      tokens.push({ type: "arrow", value, at, end: here() });
     } else if (char === "%" && peek(1) === "%") {
       while (peek() !== undefined && peek() !== "\n") advance();
     } else if (char === ",") {

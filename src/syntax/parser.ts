@@ -5,11 +5,13 @@ import type {
   Axis,
   Direction,
   Document,
+  LineStatement,
   Placement,
   Shape,
   ShapeStatement,
   Statement,
 } from "./ast.ts";
+import { readArrow } from "./arrow.ts";
 import { tokenize } from "./lexer.ts";
 import type { Token, TokenType } from "./lexer.ts";
 
@@ -18,6 +20,7 @@ const NAMES: Record<TokenType, string> = {
   string: "文字列",
   number: "数",
   comma: "「,」",
+  arrow: "線の記号",
   newline: "改行",
   eof: "ファイルの終わり",
 };
@@ -56,11 +59,30 @@ export function parse(source: string): Document {
 
   function statement(): Statement {
     const head = expect("word", "図形の種類");
+    // 2つ目が線の記号なら線の文(図形の種類や align という名前の図形も結べる)
+    if (peek().type === "arrow") return line(head);
     if (head.value === "align") return align(head);
     if (!isShape(head.value)) {
       throw new ZuError(`「${head.value}」という図形はありません(${SHAPES.join("、")})`, head.at);
     }
     return shape(head, head.value);
+  }
+
+  // a ---> b "ラベル": 2つの図形を線で結ぶ
+  function line(head: Token): LineStatement {
+    const arrow = readArrow(next().value)!;
+    const to = expect("word", "結ぶ先の図形の名前");
+    const label = peek().type === "string" ? next().value : null;
+    if (!atLineEnd()) throw new ZuError(`線の文には${describe(peek())}を書けません(ラベルは "…" で書きます)`, peek().at);
+    return {
+      kind: "line",
+      from: { id: head.value, at: head.at },
+      to: { id: to.value, at: to.at },
+      arrow,
+      label,
+      at: head.at,
+      end: tokens[index - 1]!.end,
+    };
   }
 
   // align row a b c: 挙げた図形を同じ段(column なら同じ列)に揃える

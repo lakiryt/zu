@@ -126,3 +126,46 @@ test("printing a statement gives back the same statement", () => {
   }
   assert.equal(print(parse("text a right a").statements[0]!), "text a right of a");
 });
+
+test("arrows are read as one token and turned into style and heads", () => {
+  const arrows = (source: string) =>
+    parse(source).statements.map((statement) => (statement.kind === "line" ? statement.arrow : null));
+  assert.deepEqual(arrows("a --- b\na -.-> b\na ===>> b\na <---o b\na o-..-o b\na -- b"), [
+    { style: "solid", start: "none", end: "none" },
+    { style: "dotted", start: "none", end: "open" },
+    { style: "thick", start: "none", end: "filled" },
+    { style: "solid", start: "open", end: "dot" },
+    { style: "dotted", start: "dot", end: "dot" },
+    { style: "solid", start: "none", end: "none" },
+  ]);
+  // 名前の o や、数の -40 は線の記号にしない
+  assert.deepEqual(kinds("text o at -40 0"), ["word:text", "word:o", "word:at", "number:-40", "number:0", "eof:"]);
+});
+
+test("a line statement holds both ends, the arrow and the label", () => {
+  const [statement] = parse('a <<--->> b "代理権の授与" %% メモ').statements;
+  assert.deepEqual(statement, {
+    kind: "line",
+    from: { id: "a", at: { line: 1, column: 1 } },
+    to: { id: "b", at: { line: 1, column: 11 } },
+    arrow: { style: "solid", start: "filled", end: "filled" },
+    label: "代理権の授与",
+    at: { line: 1, column: 1 },
+    end: { line: 1, column: 21 },
+  });
+  // 図形の種類や align という名前の図形も結べる
+  assert.equal(parse("text --- align").statements[0]?.kind, "line");
+});
+
+test("line errors name what was expected", () => {
+  assertError("a --->", 1, 7, /結ぶ先の図形の名前が必要です/);
+  assertError("a ---> b c", 1, 10, /線の文には「c」を書けません/);
+  assertError("a ---> b <", 1, 10, /「<」は使えません/);
+});
+
+test("printing a line gives back the same line", () => {
+  for (const source of ['a -.->> b "x\\ny"', "a o=== b", "a <--- b", "a --- b"]) {
+    const [statement] = parse(source).statements;
+    assert.equal(print(statement!), source);
+  }
+});

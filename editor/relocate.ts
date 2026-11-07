@@ -205,9 +205,12 @@ function pinDown(
   desired: Map<string, Point>,
   origin: Point,
   override: (statement: ShapeStatement) => ShapeStatement | null | undefined,
+  // 消す図形。その図形に結んだ線も消す
+  removed: string | null = null,
 ) {
   return edit.rewrite(text, document, (statement) => {
     if (statement.kind === "align") return changes.has(statement) ? changes.get(statement) : undefined;
+    if (statement.kind === "line") return statement.from.id === removed || statement.to.id === removed ? null : undefined;
     const overridden = override(statement);
     if (overridden !== undefined) return overridden;
     if (loose.includes(statement.id)) return { ...statement, placement: atPoint(desired.get(statement.id)!, origin) };
@@ -284,7 +287,7 @@ export function removeShape(text: string, id: string) {
     .map((statement) => statement.id);
 
   const next = pinDown(text, document, changes, loose, desired, scene.origin, (statement) =>
-    statement.id === id ? null : undefined,
+    statement.id === id ? null : undefined, id,
   );
   if (desired.size > 0 && !matches(next, desired)) throw new ZuError("消せませんでした", { line: 1, column: 1 });
   return tidy(next, loose, desired, scene.shapes, document);

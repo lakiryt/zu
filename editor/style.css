@@ -170,6 +170,29 @@ main {
   stroke-width: 1.5;
 }
 
+#stage .line {
+  cursor: pointer;
+}
+
+#stage .line .hit {
+  stroke: transparent;
+  stroke-width: 14;
+  stroke-linecap: round;
+}
+
+#stage .line:hover .hit,
+#stage .line.selected .hit {
+  stroke: var(--accent-soft);
+}
+
+#stage .line.selected .hit {
+  stroke: rgba(37, 99, 235, 0.25);
+}
+
+#stage .line.detached {
+  opacity: 0.2;
+}
+
 #stage .numeric {
   fill: var(--warn);
 }

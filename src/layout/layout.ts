@@ -1,6 +1,10 @@
 import { ZuError } from "../errors.ts";
 import type { AlignStatement, Direction, Document, Shape, ShapeStatement } from "../syntax/ast.ts";
+import { placeLines } from "./lines.ts";
+import type { PlacedLine } from "./lines.ts";
 import { measureText } from "./measure.ts";
+
+export type { PlacedLine } from "./lines.ts";
 
 // 図形の外枠。左上の座標と大きさ
 export type Box = { x: number; y: number; width: number; height: number };
@@ -18,7 +22,7 @@ export type Geometry =
 export type PlacedShape = { id: string; label: string; box: Box; anchor: Point; geometry: Geometry };
 
 // origin は書いた座標の (0, 0) が図のどこに来たか。全体を余白の内側へずらした量でもある
-export type Scene = { width: number; height: number; origin: Point; shapes: PlacedShape[] };
+export type Scene = { width: number; height: number; origin: Point; shapes: PlacedShape[]; lines: PlacedLine[] };
 
 export const DEFAULT_GAP = 40;
 export const PADDING = 20;
@@ -210,22 +214,60 @@ export function layout(document: Document): Scene {
     return { statement, size, anchor, box };
   });
 
-  // いちばん左上の図形が余白のすぐ内側に来るようずらす
-  const shiftX = PADDING - Math.min(Infinity, ...placed.map(({ box }) => box.x));
-  const shiftY = PADDING - Math.min(Infinity, ...placed.map(({ box }) => box.y));
+  const lines = placeLines(
+    document.statements.filter((statement) => statement.kind === "line"),
+    new Map(placed.map(({ statement, size, anchor, box }) => [statement.id, { id: statement.id, anchor, body: bodyOf(size, anchor, box) }])),
+  );
+
+  // 図の範囲は、図形の外枠と、線の端と、線のラベルの下地が入る大きさ
+  const extents: Box[] = [
+    ...placed.map(({ box }) => box),
+    ...lines.flatMap(({ start, end, labelBox }) => [
+      { x: start.x, y: start.y, width: 0, height: 0 },
+      { x: end.x, y: end.y, width: 0, height: 0 },
+      ...(labelBox ? [labelBox] : []),
+    ]),
+  ];
+
+  // いちばん左上のものが余白のすぐ内側に来るようずらす
+  const shiftX = PADDING - Math.min(Infinity, ...extents.map((box) => box.x));
+  const shiftY = PADDING - Math.min(Infinity, ...extents.map((box) => box.y));
+  const shift = <T extends Point>(point: T): T => ({ ...point, x: point.x + shiftX, y: point.y + shiftY });
 
   const shapes = placed.map(({ statement, size, anchor, box }) => ({
     id: statement.id,
     label: statement.label ?? statement.id,
-    box: { ...box, x: box.x + shiftX, y: box.y + shiftY },
-    anchor: { x: anchor.x + shiftX, y: anchor.y + shiftY },
+    box: shift(box),
+    anchor: shift(anchor),
     geometry: size.geometry,
   }));
+  const placedLines = lines.map((line) => ({
+    ...line,
+    start: shift(line.start),
+    end: shift(line.end),
+    labelBox: line.labelBox && shift(line.labelBox),
+  }));
 
-  if (shapes.length === 0) return { width: PADDING * 2, height: PADDING * 2, origin: { x: PADDING, y: PADDING }, shapes };
-  const right = Math.max(...shapes.map(({ box }) => box.x + box.width));
-  const bottom = Math.max(...shapes.map(({ box }) => box.y + box.height));
-  return { width: right + PADDING, height: bottom + PADDING, origin: { x: shiftX, y: shiftY }, shapes };
+  if (extents.length === 0) {
+    return { width: PADDING * 2, height: PADDING * 2, origin: { x: PADDING, y: PADDING }, shapes, lines: placedLines };
+  }
+  const right = Math.max(...extents.map((box) => box.x + box.width)) + shiftX;
+  const bottom = Math.max(...extents.map((box) => box.y + box.height)) + shiftY;
+  return {
+    width: right + PADDING,
+    height: bottom + PADDING,
+    origin: { x: shiftX, y: shiftY },
+    shapes,
+    lines: placedLines,
+  };
+}
+
+// 線を切る枠。立方体はラベルを除いた立方体の部分
+function bodyOf(size: Sized, anchor: Point, box: Box): Box {
+  const { geometry } = size;
+  if (geometry.shape !== "cube") return box;
+  const side = geometry.edge + geometry.depth;
+  return { x: anchor.x - side / 2, y: box.y, width: side, height: side };
 }
 
 // 同じ向きの揃えで図形を共有するものは一つにまとめる。並びは最初に挙げた順

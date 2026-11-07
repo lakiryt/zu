@@ -38,6 +38,27 @@ export type AlignStatement = {
   end: SourcePosition;
 };
 
-export type Statement = ShapeStatement | AlignStatement;
+// 線の種類。solid は ---、dotted は -.-、thick は ===
+export const LINE_STYLES = ["solid", "dotted", "thick"] as const;
+export type LineStyle = (typeof LINE_STYLES)[number];
+
+// 線の端。open は塗りつぶさない三角(>)、filled は塗りつぶした三角(>>)、dot は塗りつぶした丸(o)
+export const HEADS = ["none", "open", "filled", "dot"] as const;
+export type Head = (typeof HEADS)[number];
+
+export type Arrow = { style: LineStyle; start: Head; end: Head };
+
+// a ---> b "ラベル"。start は from の側、end は to の側の端
+export type LineStatement = {
+  kind: "line";
+  from: { id: string; at: SourcePosition };
+  to: { id: string; at: SourcePosition };
+  arrow: Arrow;
+  label: string | null;
+  at: SourcePosition;
+  end: SourcePosition;
+};
+
+export type Statement = ShapeStatement | AlignStatement | LineStatement;
 
 export type Document = { statements: Statement[] };

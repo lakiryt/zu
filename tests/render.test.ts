@@ -129,3 +129,48 @@ test("the svg draws each shape and escapes labels", () => {
   assert.equal(group("c").match(/<polygon/g)?.length, 3);
   assert.equal(group("c").match(/<tspan/g)?.length, 2);
 });
+
+test("a line runs between the bodies, stopping short of their outlines", () => {
+  const scene = layout(parse("text a\ncube b right of a by 100\na ---> b"));
+  const [a, b] = scene.shapes;
+  const [line] = scene.lines;
+  // 本体の中心どうしは同じ高さなので、線は水平
+  close(line!.start.y, a!.anchor.y);
+  close(line!.end.y, b!.anchor.y);
+  close(line!.start.x, a!.box.x + a!.box.width + 6);
+  // 立方体はラベルを除いた本体の枠で切る(ラベルの幅は本体より狭い)
+  close(line!.end.x, b!.anchor.x - (60 + 18) / 2 - 6);
+});
+
+test("lines between the same pair are drawn side by side, and labels sit in the middle", () => {
+  const scene = layout(parse('text a\ntext b right of a by 200\na ---> b "行き"\nb ---> a'));
+  const [go, back] = scene.lines;
+  close(Math.abs(go!.start.y - back!.start.y), 16);
+  const middle = (go!.start.x + go!.end.x) / 2;
+  close(go!.labelBox!.x + go!.labelBox!.width / 2, middle);
+  assert.equal(back!.labelBox, null);
+});
+
+test("labels are inside the drawing", () => {
+  const scene = layout(parse('text a\ntext b below a by 10\na --- b "とても長いラベルとても長いラベル"'));
+  const box = scene.lines[0]!.labelBox!;
+  assert.ok(box.x >= PADDING - 1e-9);
+  assert.ok(box.x + box.width <= scene.width - PADDING + 1e-9);
+});
+
+test("broken lines are reported where they are written", () => {
+  fails("text a\na --- x", 2, /「x」という図形はありません/);
+  fails("text a\na --- a", 2, /同じ図形どうし/);
+});
+
+test("the svg draws line styles and heads", () => {
+  const svg = render("text a\ntext b\na -.->> b\na ===o b\nb ---> a");
+  const line = (index: number) => svg.match(new RegExp(`<g data-line="${index}">(.*?)</g>`))?.[1] ?? "";
+  assert.match(line(0), /stroke-dasharray/);
+  assert.match(line(0), /<polygon[^>]*fill="#333333"/);
+  assert.match(line(1), /stroke-width="3"/);
+  assert.match(line(1), /<circle/);
+  assert.match(line(2), /<polygon[^>]*fill="#ffffff"/);
+  // 線は図形より先に(下に)描く
+  assert.ok(svg.indexOf('data-line="0"') < svg.indexOf('data-id="a"'));
+});

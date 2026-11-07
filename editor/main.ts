@@ -1,27 +1,16 @@
 // エディタの画面。正本は左の .zu の文字で、図の操作は文字を書き換えてから描き直す
 import { ZuError, layout, parse, toSvg } from "../src/index.ts";
 import type { PlacedShape, Point, Scene } from "../src/layout/layout.ts";
-import { SHAPES } from "../src/syntax/ast.ts";
-import type { Direction, Document, Placement, Shape, ShapeStatement } from "../src/syntax/ast.ts";
+import { HEADS, LINE_STYLES, SHAPES } from "../src/syntax/ast.ts";
+import type { Direction, Document, Head, LineStatement, LineStyle, Placement, Shape, ShapeStatement } from "../src/syntax/ast.ts";
 import * as edit from "./edit.ts";
 import { relocate, removeShape } from "./relocate.ts";
 import type { Move } from "./relocate.ts";
 import { nearest, slide, slots } from "./snap.ts";
 import type { Slot } from "./snap.ts";
+import SAMPLE from "../examples/agency.zu?raw";
 
-const SAMPLE = `%% 三人の位置を決め、物をその近くに置く
-text a "本人(A)"
-text c "相手方(C)" right of a by 240
-text b "代理人(B)" below a by 100
-
-%% 物は名前の右や下に置ける
-parallelogram land "甲土地" below c
-cube item "絵画\\n(時価100万円)" right of c by 60
-cube small "指輪" size 36
-
-%% 代理人と土地を同じ段に揃える
-align row b land
-`;
+// 初めて開いたときの例。examples/agency.zu をそのまま使う
 
 const STORAGE_KEY = "zu-editor:source";
 // 図の周りに取る、ドラッグ用の余白
@@ -46,6 +35,8 @@ let parsed: Document | null = null;
 let scene: Scene | null = null;
 let broken = false;
 let selected: string[] = [];
+// 選んでいる線(書いた順の番号)。図形と線は同時には選ばない
+let selectedLine: number | null = null;
 let fileName = "diagram.zu";
 let advancedOpen = false;
 const history = { past: [] as string[], future: [] as string[] };
@@ -137,16 +128,24 @@ source.addEventListener("input", () => {
   update();
 });
 
-// 文字のカーソルがある行の図形を選ぶ
+// 文字のカーソルがある行の図形か線を選ぶ
 function selectFromCursor() {
   if (!parsed || broken) return;
   const line = source.value.slice(0, source.selectionStart).split("\n").length;
   const id = edit.shapeAtLine(parsed, line);
+  const lineIndex = edit.lineAtLine(parsed, line);
   if (id && !(selected.length === 1 && selected[0] === id)) {
     selected = [id];
-    drawSelection();
-    renderPanel();
+    selectedLine = null;
+  } else if (lineIndex !== null && selectedLine !== lineIndex) {
+    selected = [];
+    selectedLine = lineIndex;
+  } else {
+    return;
   }
+  drawSelection();
+  renderPanel();
+  renderToolbar();
 }
 source.addEventListener("click", selectFromCursor);
 source.addEventListener("keyup", selectFromCursor);
@@ -164,6 +163,7 @@ function update() {
   }
   stage.classList.toggle("stale", broken);
   if (scene) selected = selected.filter((id) => scene!.shapes.some((shape) => shape.id === id));
+  if (scene && selectedLine !== null && selectedLine >= scene.lines.length) selectedLine = null;
   draw();
   renderPanel();
   renderToolbar();
@@ -217,6 +217,16 @@ function draw() {
       group.appendChild(mark);
     }
   }
+  // 線は細いので、つかみやすいよう太い透明の線を重ねる
+  scene.lines.forEach((line, index) => {
+    const group = root.querySelector(`g[data-line="${index}"]`);
+    if (!group) return;
+    group.classList.add("line");
+    group.insertBefore(
+      svgElement("line", { class: "hit", x1: line.start.x, y1: line.start.y, x2: line.end.x, y2: line.end.y }),
+      group.firstChild,
+    );
+  });
   root.appendChild(svgElement("g", { id: "overlay" }));
   drawSelection();
 }
@@ -227,6 +237,15 @@ function drawSelection() {
   for (const group of root.querySelectorAll("g.shape")) {
     group.classList.toggle("selected", selected.includes(group.getAttribute("data-id") ?? ""));
   }
+  for (const group of root.querySelectorAll("g.line")) {
+    group.classList.toggle("selected", group.getAttribute("data-line") === String(selectedLine));
+  }
+}
+
+function refreshSelection() {
+  drawSelection();
+  renderPanel();
+  renderToolbar();
 }
 
 function pointIn(root: SVGSVGElement, event: PointerEvent): Point {
@@ -254,14 +273,21 @@ let drag: Drag | null = null;
 stage.addEventListener("pointerdown", (event) => {
   const root = svg();
   if (!root || !scene || !parsed || broken || event.button !== 0) return;
+  const lineGroup = (event.target as Element).closest("g.line");
+  if (lineGroup) {
+    selected = [];
+    selectedLine = Number(lineGroup.getAttribute("data-line"));
+    refreshSelection();
+    return;
+  }
   const group = (event.target as Element).closest("g.shape");
   if (!group) {
     selected = [];
-    drawSelection();
-    renderPanel();
-    renderToolbar();
+    selectedLine = null;
+    refreshSelection();
     return;
   }
+  selectedLine = null;
   const id = group.getAttribute("data-id")!;
   const narrow = !event.shiftKey && selected.includes(id) && selected.length > 1;
   if (event.shiftKey) selected = selected.includes(id) ? selected.filter((other) => other !== id) : [...selected, id];
@@ -292,6 +318,14 @@ stage.addEventListener("pointermove", (event) => {
   const dx = point.x - drag.start.x;
   const dy = point.y - drag.start.y;
   if (!drag.moved && Math.hypot(dx, dy) < 3) return;
+  if (!drag.moved) {
+    // 動かす図形に結んだ線は、放すまで薄くする(放すと引き直す)
+    scene.lines.forEach((line, index) => {
+      if (drag!.moving.has(line.from) || drag!.moving.has(line.to)) {
+        root.querySelector(`g[data-line="${index}"]`)?.classList.add("detached");
+      }
+    });
+  }
   drag.moved = true;
 
   for (const id of drag.moving) {
@@ -442,6 +476,49 @@ function numberField(label: string, value: number | null, placeholder: string, o
   return html("label", { class: "field" }, label, input);
 }
 
+const STYLE_NAMES: Record<LineStyle, string> = { solid: "実線", dotted: "点線", thick: "太線" };
+const HEAD_NAMES: Record<Head, string> = { none: "なし", open: "矢印(白抜き)", filled: "矢印(塗りつぶし)", dot: "丸" };
+
+function choice<T extends string>(label: string, options: readonly T[], names: Record<T, string>, value: T, onChange: (value: T) => void) {
+  const select = html("select") as HTMLSelectElement;
+  for (const option of options) select.append(html("option", { value: option }, names[option]));
+  select.value = value;
+  select.addEventListener("change", () => onChange(select.value as T));
+  return html("label", { class: "field" }, label, select);
+}
+
+function renderLinePanel(index: number) {
+  const statement = edit.lines(parsed!)[index];
+  if (!statement) return;
+  const change = (next: LineStatement | null) => {
+    if (next === null) selectedLine = null;
+    commit(edit.replaceLine(text, parsed!, index, next));
+  };
+  const { arrow } = statement;
+  const label = html("textarea", { rows: "2", placeholder: "なし" }) as HTMLTextAreaElement;
+  label.value = statement.label ?? "";
+  label.addEventListener("change", () => change({ ...statement, label: label.value === "" ? null : label.value }));
+
+  panel.append(
+    html(
+      "div",
+      { class: "field" },
+      html("span", {}, "結ぶ図形"),
+      html("span", { class: "value" }, `${statement.from.id} → ${statement.to.id}`),
+      button(
+        "向きを入れ替える",
+        () => change({ ...statement, from: statement.to, to: statement.from, arrow: { ...arrow, start: arrow.end, end: arrow.start } }),
+        { class: "small" },
+      ),
+    ),
+    choice("線の種類", LINE_STYLES, STYLE_NAMES, arrow.style, (style) => change({ ...statement, arrow: { ...arrow, style } })),
+    choice(`${statement.from.id} の側の端`, HEADS, HEAD_NAMES, arrow.start, (start) => change({ ...statement, arrow: { ...arrow, start } })),
+    choice(`${statement.to.id} の側の端`, HEADS, HEAD_NAMES, arrow.end, (end) => change({ ...statement, arrow: { ...arrow, end } })),
+    html("label", { class: "field" }, "ラベル", label),
+    html("div", { class: "row" }, button("この線を消す", () => change(null), { class: "danger" })),
+  );
+}
+
 function renderPanel() {
   panel.replaceChildren();
   if (broken) {
@@ -449,6 +526,11 @@ function renderPanel() {
     return;
   }
   if (!parsed) return;
+
+  if (selectedLine !== null) {
+    renderLinePanel(selectedLine);
+    return;
+  }
 
   if (selected.length === 0) {
     panel.append(
@@ -459,6 +541,7 @@ function renderPanel() {
         html("li", {}, "ドラッグ: ほかの図形の上下左右に寄せて置く(ほかの図形は動かない)"),
         html("li", {}, "Shift+クリック: いくつも選ぶ。まとめてドラッグすると、互いの位置を保って動く"),
         html("li", {}, "Alt+ドラッグ: 数で置く(間や座標)"),
+        html("li", {}, "2つ選んで「線でつなぐ」: 線を引く。線をクリックすると種類や矢印を変えられる"),
       ),
     );
     return;
@@ -575,7 +658,22 @@ function renderPanel() {
 
 // --- 道具 ---
 
+function connect() {
+  if (!parsed || selected.length !== 2) return;
+  const index = edit.lines(parsed).length;
+  const [from, to] = selected as [string, string];
+  selected = [];
+  selectedLine = index;
+  commit(edit.addLine(text, from, to));
+}
+
 function removeSelected() {
+  if (parsed && selectedLine !== null) {
+    const index = selectedLine;
+    selectedLine = null;
+    commit(edit.replaceLine(text, parsed, index, null));
+    return;
+  }
   if (!parsed || selected.length === 0) return;
   try {
     let next = text;
@@ -616,6 +714,7 @@ function renderToolbar() {
       { class: "group" },
       button("段を揃える", () => commit(edit.addAlign(text, parsed!, "row", selected)), selected.length < 2 || broken ? { disabled: "" } : { title: "選んだ図形を同じ高さに" }),
       button("列を揃える", () => commit(edit.addAlign(text, parsed!, "column", selected)), selected.length < 2 || broken ? { disabled: "" } : { title: "選んだ図形を同じ左右の位置に" }),
+      button("線でつなぐ", connect, selected.length !== 2 || broken ? { disabled: "" } : { title: "先に選んだ図形から後に選んだ図形へ" }),
     ),
     html(
       "div",
@@ -660,12 +759,13 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     redo();
   } else if (event.key === "Delete" || event.key === "Backspace") {
-    if (selected.length > 0) {
+    if (selected.length > 0 || selectedLine !== null) {
       event.preventDefault();
       removeSelected();
     }
   } else if (event.key === "Escape") {
     selected = [];
+    selectedLine = null;
     drawSelection();
     renderPanel();
     renderToolbar();
