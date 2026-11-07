@@ -24,6 +24,17 @@ export type ShapeStatement = {
   at: SourcePosition;
 };
 
-export type Statement = ShapeStatement;
+export const AXES = ["row", "column"] as const;
+// row は同じ段(上下の中心を揃える)、column は同じ列(左右の中心を揃える)
+export type Axis = (typeof AXES)[number];
+
+export type AlignStatement = {
+  kind: "align";
+  axis: Axis;
+  members: { id: string; at: SourcePosition }[];
+  at: SourcePosition;
+};
+
+export type Statement = ShapeStatement | AlignStatement;
 
 export type Document = { statements: Statement[] };

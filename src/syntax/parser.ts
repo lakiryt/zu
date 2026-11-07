@@ -1,6 +1,15 @@
 import { ZuError } from "../errors.ts";
-import { DIRECTIONS, SHAPES } from "./ast.ts";
-import type { Direction, Document, Placement, Shape, ShapeStatement } from "./ast.ts";
+import { AXES, DIRECTIONS, SHAPES } from "./ast.ts";
+import type {
+  AlignStatement,
+  Axis,
+  Direction,
+  Document,
+  Placement,
+  Shape,
+  ShapeStatement,
+  Statement,
+} from "./ast.ts";
 import { tokenize } from "./lexer.ts";
 import type { Token, TokenType } from "./lexer.ts";
 
@@ -17,6 +26,7 @@ const describe = (token: Token) =>
   token.type === "word" || token.type === "number" ? `「${token.value}」` : NAMES[token.type];
 
 const isShape = (value: string): value is Shape => (SHAPES as readonly string[]).includes(value);
+const isAxis = (value: string): value is Axis => (AXES as readonly string[]).includes(value);
 const isDirection = (value: string): value is Direction =>
   (DIRECTIONS as readonly string[]).includes(value);
 
@@ -44,11 +54,31 @@ export function parse(source: string): Document {
     if (peek().type === "comma") next();
   }
 
-  function statement(): ShapeStatement {
+  function statement(): Statement {
     const head = expect("word", "図形の種類");
+    if (head.value === "align") return align(head);
     if (!isShape(head.value)) {
       throw new ZuError(`「${head.value}」という図形はありません(${SHAPES.join("、")})`, head.at);
     }
+    return shape(head, head.value);
+  }
+
+  // align row a b c: 挙げた図形を同じ段(column なら同じ列)に揃える
+  function align(head: Token): AlignStatement {
+    const axis = expect("word", "揃え方(row か column)");
+    if (!isAxis(axis.value)) {
+      throw new ZuError(`揃え方は row か column です(「${axis.value}」がありました)`, axis.at);
+    }
+    const members: AlignStatement["members"] = [];
+    while (!atLineEnd()) {
+      const token = expect("word", "揃える図形の名前");
+      members.push({ id: token.value, at: token.at });
+    }
+    if (members.length < 2) throw new ZuError("揃える図形を2つ以上書きます", peek().at);
+    return { kind: "align", axis: axis.value, members, at: head.at };
+  }
+
+  function shape(head: Token, shapeName: Shape): ShapeStatement {
     const id = expect("word", "図形の名前").value;
     const label = peek().type === "string" ? next().value : null;
     let placement: Placement | null = null;
@@ -88,10 +118,10 @@ export function parse(source: string): Document {
       }
     }
 
-    return { kind: "shape", shape: head.value, id, label, placement, size, at: head.at };
+    return { kind: "shape", shape: shapeName, id, label, placement, size, at: head.at };
   }
 
-  const statements: ShapeStatement[] = [];
+  const statements: Statement[] = [];
   while (peek().type !== "eof") {
     if (peek().type === "newline") {
       next();

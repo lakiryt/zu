@@ -1,9 +1,12 @@
 %% 三人の位置を決め、物をその近くに置く
-text a "本人(A)" at 0 0
+text a "本人(A)"
 text c "相手方(C)" right of a by 240
 text b "代理人(B)" below a by 100
 
-%% 物は名前の右や下に、間を指定して置ける
-parallelogram land "甲土地" below c by 100
+%% 物は名前の右や下に置ける
+parallelogram land "甲土地" below c
 cube item "絵画\n(時価100万円)" right of c by 60
 cube small "指輪" size 36
+
+%% 代理人と土地を同じ段に揃える
+align row b land

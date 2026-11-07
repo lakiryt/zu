@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { ZuError } from "../src/errors.ts";
 import { tokenize } from "../src/syntax/lexer.ts";
 import { parse } from "../src/syntax/parser.ts";
+import type { ShapeStatement } from "../src/syntax/ast.ts";
 
 const kinds = (source: string) => tokenize(source).map(({ type, value }) => `${type}:${value}`);
 
@@ -39,10 +40,11 @@ test("a statement holds the shape, name, label, placement and size", () => {
     '%% 図\n\ntext a "本人" at 10 20\ncube b right of a by 30 size 50\nparallelogram c below a',
   );
   assert.deepEqual(
-    statements.map(({ at: _, ...rest }) => ({
-      ...rest,
-      placement: rest.placement && { ...rest.placement, at: undefined },
-    })),
+    statements.map((statement) => {
+      assert.equal(statement.kind, "shape");
+      const { at: _, ...rest } = statement as ShapeStatement;
+      return { ...rest, placement: rest.placement && { ...rest.placement, at: undefined } };
+    }),
     [
       { kind: "shape", shape: "text", id: "a", label: "本人", placement: { kind: "at", x: 10, y: 20, at: undefined }, size: null },
       {
@@ -68,7 +70,29 @@ test("a statement holds the shape, name, label, placement and size", () => {
 
 test("a shape named of can still be referred to", () => {
   const [, second] = parse("text of\ntext b below of of").statements;
-  assert.equal(second?.placement?.kind === "beside" && second.placement.of, "of");
+  assert.equal(second?.kind === "shape" && second.placement?.kind === "beside" && second.placement.of, "of");
+});
+
+test("an align statement lists the axis and the shapes with their places", () => {
+  const [statement] = parse("align row b  land item").statements;
+  assert.deepEqual(statement, {
+    kind: "align",
+    axis: "row",
+    members: [
+      { id: "b", at: { line: 1, column: 11 } },
+      { id: "land", at: { line: 1, column: 14 } },
+      { id: "item", at: { line: 1, column: 19 } },
+    ],
+    at: { line: 1, column: 1 },
+  });
+  assert.equal(parse("align column a b").statements[0]?.kind, "align");
+});
+
+test("align errors name what was expected", () => {
+  assertError("align a b", 1, 7, /揃え方は row か column です/);
+  assertError("align", 1, 6, /揃え方\(row か column\)が必要です/);
+  assertError("align row a", 1, 12, /2つ以上/);
+  assertError('align row a "b"', 1, 13, /揃える図形の名前が必要です/);
 });
 
 test("syntax errors name what was expected", () => {

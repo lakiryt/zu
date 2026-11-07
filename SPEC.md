@@ -6,12 +6,15 @@
 
 ```
 %% 三人と、土地と動産
-text a "本人(A)" at 0 0
+text a "本人(A)"
 text c "相手方(C)" right of a by 200
-text b "代理人(B)" below a by 80
+text b "代理人(B)" below a
 
-parallelogram land "甲土地" below c by 80
+parallelogram land "甲土地" below c
 cube item "絵画" right of land
+
+%% b と land を同じ段に揃える
+align row b land
 ```
 
 ## 字句
@@ -30,6 +33,8 @@ cube item "絵画" right of land
 document   = { line }
 line       = [ statement ] [ comment ] newline
 statement  = shape id [ label ] { option }
+           | "align" axis id id { id }
+axis       = "row" | "column"
 shape      = "text" | "parallelogram" | "cube"
 label      = string
 option     = "at" number [ "," ] number
@@ -53,13 +58,43 @@ direction  = "left" | "right" | "above" | "below"
 
 ## 置き方
 
-座標は左上を原点とし、右と下が正。単位は SVG の px。
+図形どうしの関係(隣、揃え)で置くのを基本にし、数はできるだけ書かずに済むようにする。数は逃げ道として残す。
 
-- `at x y`: 図形の中心を (x, y) に置く
-- `right of id [by gap]`: `of` は省いてもよい(`below a`)。id の図形の右に、間を gap(既定 40)空けて置く。上下の中心は揃える。`left`、`above`、`below` も同じ。間は図形の外枠どうしの距離で、cube のラベルも外枠に含む
-- 置き方を書かない図形は、直前に書いた図形の右に置く。最初の図形は (0, 0) に置く
+座標は左上を原点とし、右と下が正。単位は SVG の px。ただし出力では全体を余白の内側へずらすので(「出力」)、原点そのものに意味はなく、効くのは図形どうしの差だけ。
+
+### 本体の中心
+
+置き方は、図形の本体の中心で決める。本体はラベルを除いた図形そのもの。`text` と `parallelogram` は外枠の中心、`cube` は立方体(正面、上面、側面を合わせた部分)の中心で、下のラベルを含まない。
+
+### 一つの図形の置き方
+
+- `right of id [by gap]`: `of` は省いてもよい(`below a`)。id の図形の右に、間を gap(既定 40)空けて置く。上下は本体の中心を揃える。`left`、`above`、`below` も同じ。間は図形の外枠どうしの距離で、cube のラベルも外枠に含む
+- 置き方を書かない図形は、直前に書いた図形の右に置く(`right of 直前の図形` と同じ)。最初の図形は本体の中心を (0, 0) に置く
+- `at x y`: 本体の中心を (x, y) に置く
 
 参照する id は、後で書く図形でもよい。参照がたどれないとき(存在しない、循環している)は誤りにする。
+
+### 揃え(`align`)
+
+`below` は基準の下端から間を空けるので、高さの違う図形を別々の基準の下に置くと、同じ段に揃わない。`align` で揃えを書く。
+
+- `align row a b c`: 挙げた図形の本体の中心の高さを揃える(同じ段に並べる)。左右の位置はそれぞれの置き方のまま
+- `align column a b c`: 本体の中心の左右の位置を揃える(同じ列に並べる)。上下の位置はそれぞれの置き方のまま
+- 図形は2つ以上挙げる。同じ図形を2回挙げたり、ない図形を挙げたりしたら誤り
+- 同じ向き(row どうし、column どうし)の揃えが図形を共有するときは、一つの揃えにまとめる(`align row a b` と `align row b c` は `align row a b c` と同じ)
+- 一つの図形が row と column の両方に入ってよい
+- 揃えで動いた図形を基準にする図形は、動いた後の位置を基準にする
+
+揃える位置は次のように決める。row の場合を書く。column は `above`/`below` を `left`/`right` に、下と上を右と左に読み替える。
+
+1. 挙げた図形それぞれについて、揃えがないときの位置を求める
+2. `above`/`below` 以外の置き方(`at`、`left`/`right`、置き方なし)の図形があれば、そのうち最初に挙げたものに合わせる
+3. なければ、`below` の図形だけなら最も下のものに、`above` の図形だけなら最も上のものに合わせる。これで、`below`/`above` の間は書いた値(既定 40)より狭くならない
+4. `below` と `above` が混ざるときは、最初に挙げたものに合わせる。間が狭まったり、図形が重なったりすることがある
+
+置き方をたどると同じ揃えの別の図形と同じ高さになる図形(`align row a b` で `b right of a` など)は、2〜4 で合わせる先を選ぶときに数えない。
+
+揃えと置き方が両立しないとき(`text b below a` と `align row a b` のように、ある図形の下に置いた図形を同じ段に揃えるなど)は、循環として誤りにする。
 
 ## 出力
 
