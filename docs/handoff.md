@@ -50,12 +50,13 @@ block-beta:
 - [design/placement.md](design/placement.md): 数値に頼らない置き方(揃え、並び、間の段階)
 - [design/lines.md](design/lines.md): 線と矢印。決めたことと未決
 - [design/editor.md](design/editor.md): 視覚的なエディタ(`editor/`)。できること、暫定の判断、未決
+- [design/brand.md](design/brand.md): 名前(Law図)、ロゴ、検索と共有の情報
 - [research/mermaid-layout.md](research/mermaid-layout.md): Mermaid の配置と大きさの扱いの調べ
 
 - 線の続き([design/lines.md](design/lines.md) の「未決」)。ラベルどうしの重なりの回避、図形のどこにつなぐかの指定、曲がる線など
 - 図形の追加(人を表す記号、枠付きの箱など)。土地と動産以外の物の表し方
 - 文字幅は全角1字、それ以外0.6字で見積もっている。書体によっては長い文字列がずれる
-- 名前の `zu` と拡張子 `.zu` は仮
+- 名前: サイト(エディタ)は Law図(ローズ)、言語と拡張子は zu と `.zu` のまま(2026-11-08 決定、[design/brand.md](design/brand.md))
 - 論証ドリルに組み込むか(論証や知識に図を添える、など)。組み込むなら、論証ドリルのデータは利用者ごとに閉じている点(第三者の著作物を含み得るため共有しない)に合わせる
 - 視覚的なエディタの詰め(design/editor.md の「暫定の判断」と「未決」)
 

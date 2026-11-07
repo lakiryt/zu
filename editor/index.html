@@ -3,21 +3,67 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>zu エディタ</title>
+    <title>Law図(ローズ)— 文字で書いて図にするエディタ</title>
+    <meta
+      name="description"
+      content="Law図(ローズ)は、文字で書いた図を SVG にするエディタです。「代理人は本人の下」「本人から代理人へ矢印」のように関係を書けば、座標を決めずに図になります。図をドラッグしても文字が書き換わります。ブラウザだけで動き、.zu と SVG で保存できます。"
+    />
+    <meta name="theme-color" content="#C42B4B" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <!-- 公開先の URL の印は editor/vite.config.ts が置き換える。URL が分からないときは、印のある行ごと消える -->
+    <link rel="canonical" href="__SITE_URL__/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Law図" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta property="og:title" content="Law図(ローズ)— 文字で書いて図にするエディタ" />
+    <meta property="og:description" content="関係を文字で書けば、座標を決めずに図になる。ドラッグしても文字が書き換わる、ブラウザで動くエディタ。" />
+    <meta property="og:url" content="__SITE_URL__/" />
+    <meta property="og:image" content="__SITE_URL__/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Law図のロゴと「文字で書いて、図にする。」" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Law図",
+        "alternateName": "ローズ",
+        "url": "__SITE_URL__/",
+        "description": "文字で書いた図を SVG にするエディタ。関係を書けば、座標を決めずに図になる。",
+        "applicationCategory": "DesignApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "JavaScript が要る",
+        "inLanguage": "ja",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "JPY" }
+      }
+    </script>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <header>
-      <h1>zu</h1>
+      <h1 class="brand">
+        <img src="/favicon.svg" alt="" width="24" height="24" />
+        <span class="name">Law<span class="zu">図</span></span>
+        <span class="tagline">文字で書いて、図にする</span>
+      </h1>
       <div id="toolbar"></div>
       <input id="file" type="file" accept=".zu,text/plain" hidden />
     </header>
+    <noscript>
+      <p class="noscript">
+        Law図(ローズ)は、文字で書いた図を SVG にするエディタです。JavaScript を有効にすると使えます。
+      </p>
+    </noscript>
     <main>
       <section class="source">
-        <textarea id="source" spellcheck="false" aria-label="zu の文字"></textarea>
+        <textarea id="source" spellcheck="false" aria-label="図の文字(.zu)"></textarea>
         <div id="error" role="alert"></div>
       </section>
-      <section class="canvas">
+      <section class="canvas" aria-label="図">
         <div id="stage"></div>
         <div id="status" role="status"></div>
       </section>

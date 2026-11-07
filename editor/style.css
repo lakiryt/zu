@@ -1,14 +1,18 @@
 :root {
   color-scheme: light;
-  --bg: #f4f4f2;
+  /* Law図 の色。ばら色(ロゴの赤)を選択と強調に使い、地はわずかに赤みのある灰色にする */
+  --bg: #f6f3f4;
   --surface: #ffffff;
-  --line: #d9d9d4;
-  --text: #222222;
-  --muted: #6b6b66;
-  --accent: #2563eb;
-  --accent-soft: rgba(37, 99, 235, 0.12);
-  --warn: #c2410c;
-  --danger: #b91c1c;
+  --line: #e2d9dc;
+  --text: #241b1f;
+  --muted: #6f6367;
+  --accent: #c42b4b;
+  --accent-soft: rgba(196, 43, 75, 0.1);
+  --accent-strong: rgba(196, 43, 75, 0.25);
+  --warn: #b45309;
+  --danger: #9f1239;
+  --ink: #2a2024;
+  --brand-font: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
   font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", system-ui, sans-serif;
   font-size: 14px;
 }
@@ -35,10 +39,35 @@ header {
   background: var(--surface);
 }
 
-h1 {
+.brand {
   margin: 0;
-  font-size: 18px;
-  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.brand .name {
+  font-family: var(--brand-font);
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.brand .zu {
+  color: var(--accent);
+}
+
+.brand .tagline {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.noscript {
+  margin: 0;
+  padding: 12px 16px;
 }
 
 #toolbar {
@@ -186,7 +215,7 @@ main {
 }
 
 #stage .line.selected .hit {
-  stroke: rgba(37, 99, 235, 0.25);
+  stroke: var(--accent-strong);
 }
 
 #stage .line.detached {
@@ -227,7 +256,7 @@ main {
 #status:not(:empty) {
   padding: 6px 12px;
   border-radius: 6px;
-  background: #333333;
+  background: var(--ink);
   color: #ffffff;
 }
 
@@ -304,6 +333,12 @@ main {
   padding-left: 18px;
   color: var(--muted);
   line-height: 1.8;
+}
+
+@media (max-width: 1100px) {
+  .brand .tagline {
+    display: none;
+  }
 }
 
 @media (max-width: 900px) {

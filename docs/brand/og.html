@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- 共有したときに出る画像(1200×630)の台紙。Chrome で写して editor/public/og.png にする。手順は docs/design/brand.md -->
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; }
+  body {
+    width: 1200px; height: 630px; box-sizing: border-box; padding: 0 96px;
+    display: flex; align-items: center; gap: 72px;
+    background: #F6F3F4; color: #241B1F;
+    font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+  }
+  img { width: 300px; height: 300px; flex: none; }
+  .text { display: grid; gap: 22px; }
+  .reading { color: #C42B4B; font-size: 26px; letter-spacing: 0.5em; font-weight: 600; }
+  h1 {
+    margin: 0; font-size: 136px; line-height: 1; letter-spacing: 0.01em;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif; font-weight: 800;
+  }
+  h1 span { color: #C42B4B; }
+  .tagline { font-size: 38px; font-weight: 700; }
+  pre {
+    margin: 8px 0 0; padding: 18px 22px; border-radius: 10px; background: #FFFFFF; border: 1px solid #E4DBDE;
+    font: 24px/1.6 Consolas, "Yu Gothic", monospace; color: #6F6367;
+  }
+  pre b { color: #C42B4B; font-weight: 400; }
+</style>
+<img src="../../editor/public/favicon.svg" alt="" />
+<div class="text">
+  <div class="reading">ローズ</div>
+  <h1>Law<span>図</span></h1>
+  <div class="tagline">文字で書いて、図にする。</div>
+  <pre>text b "代理人" below a
+a <b>---></b> b "代理権の授与"</pre>
+</div>

@@ -1,0 +1,15 @@
+{
+  "name": "Law図(ローズ)",
+  "short_name": "Law図",
+  "description": "文字で書いて図にするエディタ",
+  "lang": "ja",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F6F3F4",
+  "theme_color": "#C42B4B",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

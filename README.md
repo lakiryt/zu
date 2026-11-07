@@ -1,6 +1,6 @@
 # zu
 
-図形を文字で書いて SVG にする記述言語の試作。仕様は [SPEC.md](SPEC.md)、ここまでの検討は [docs/handoff.md](docs/handoff.md)。
+図形を文字で書いて SVG にする記述言語の試作。ブラウザのエディタは **Law図**(ローズ)の名前で出す(名前とロゴは [docs/design/brand.md](docs/design/brand.md))。仕様は [SPEC.md](SPEC.md)、ここまでの検討は [docs/handoff.md](docs/handoff.md)。
 
 ```
 text a "本人(A)"
@@ -51,7 +51,7 @@ npm run build                                         # エディタを editor/d
 
 ## エディタ
 
-`editor/` はブラウザで動く視覚的なエディタ。左の文字と右の図のどちらからでも編集でき、図の操作は .zu の文字を書き換える。Vercel では `vercel.json` の設定で `editor/dist` を静的サイトとして出す。考え方は [docs/design/editor.md](docs/design/editor.md)。
+`editor/` はブラウザで動く視覚的なエディタ(Law図)。左の文字と右の図のどちらからでも編集でき、図の操作は .zu の文字を書き換える。Vercel では `vercel.json` の設定で `editor/dist` を静的サイトとして出す。独自のドメインで出すときは、環境変数 `SITE_URL` に URL を入れる(canonical、共有の画像、サイトマップに使う)。考え方は [docs/design/editor.md](docs/design/editor.md)。
 
 - ドラッグ: ほかの図形の上下左右に寄せて置く(`below c` のような関係を書く。数は書かない。ほかの図形は動かない)
 - Alt+ドラッグ: 数で置く(関係のある図形はその線の上で間を、ない図形は座標を書く)
@@ -82,3 +82,4 @@ npm run build                                         # エディタを editor/d
 | `canvas.ts` / `panel.ts` / `toolbar.ts` | 図の欄(選ぶ、ドラッグ)、右の欄、上の道具 |
 | `actions.ts` | 欄をまたいで使う操作(図形を足す、線を引く、揃える、消す、動かす) |
 | `edit.ts` / `relocate.ts` / `snap.ts` | 文字の書き換え、ほかの図形を動かさない付け替え、吸着先の計算。DOM を使わない |
+| `index.html` / `style.css` / `public/` | ページ、見た目、ロゴと共有用の画像。検索と共有の情報は `index.html` に書き、公開先の URL は `vite.config.ts` が差し込む |

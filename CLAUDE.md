@@ -13,6 +13,7 @@
 - `src/index.ts`: 公開する入口。ほかのプロジェクトは GitHub から入れ、ここ(ビルド後は `dist/index.js`)から読み込む。公開するものを変えたら README も直す
 - `cli.ts`: ファイルを読んで SVG を書く入口
 - `editor/`: ブラウザのエディタ(Vite で束ねる)。3段を使う側で、`src/index.ts` の公開するものだけを使う。`src/` から editor を参照しない。状態は `state.ts` の `Editor` に集め、各欄(`canvas.ts`、`panel.ts`、`toolbar.ts`)は変化を受けて描き直す。DOM を使わない部分(`edit.ts`、`relocate.ts`、`snap.ts`、`history.ts`、`state.ts`)は `tests/editor.test.ts` で試す
+- エディタは **Law図**(ローズ)の名前で出す。ロゴは `editor/public/favicon.svg`、色や PNG の作り直し方は [docs/design/brand.md](docs/design/brand.md)。言語の名前と拡張子は zu と `.zu` のまま
 
 ## コマンド
 

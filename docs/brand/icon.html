@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- ロゴを PNG にするための台紙。?size=180&bg=%23ffffff のように大きさと地の色を渡す。手順は docs/design/brand.md -->
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; overflow: hidden; }
+  body { display: grid; place-items: center; }
+  img { display: block; }
+</style>
+<img id="logo" src="../../editor/public/favicon.svg" alt="" />
+<script>
+  const params = new URLSearchParams(location.search);
+  const size = Number(params.get("size") ?? 180);
+  const pad = Number(params.get("pad") ?? 0.1);
+  document.body.style.width = document.body.style.height = `${size}px`;
+  document.body.style.background = params.get("bg") ?? "transparent";
+  const logo = document.getElementById("logo");
+  logo.width = logo.height = Math.round(size * (1 - pad * 2));
+</script>
