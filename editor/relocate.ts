@@ -3,17 +3,18 @@
 //
 // 進め方:
 // 1. 付け替える図形をいったん座標(at)で今の位置に置く。これで循環は起こらない
-// 2. 一つずつ、数の少ない置き方(置き方なし → 既定の間の関係 → 間を書いた関係)を試し、
-//    全部の図形の位置が変わらないものに置き換える。だめなら座標のまま残す
+// 2. 一つずつ、数の少ない置き方に置き換える。数のいらない置き方(置き方なし、既定の間の関係)で
+//    元の位置の近くに置けるならそれを選び、少しずれるのは許す(.zu の綺麗さを優先する)。
+//    だめなら間を書いた関係で位置をぴったり保ち、それもだめなら座標のまま残す
 // 3. 座標が1つだけ残り、それを最初の図形にできるなら、置き方なしにする
 import { ZuError } from "../src/errors.ts";
-import { layout } from "../src/layout/layout.ts";
+import { DEFAULT_GAP, layout } from "../src/layout/layout.ts";
 import type { PlacedShape, Point, Scene } from "../src/layout/layout.ts";
 import type { Document, Placement, ShapeStatement, Statement } from "../src/syntax/ast.ts";
 import { parse } from "../src/syntax/parser.ts";
 import { print } from "../src/syntax/print.ts";
 import * as edit from "./edit.ts";
-import { placementsFor } from "./snap.ts";
+import { placementsFor, slots } from "./snap.ts";
 
 const TOLERANCE = 0.05;
 
@@ -56,12 +57,12 @@ const atPoint = (point: Point, origin: Point): Placement => ({
   y: Math.round((point.y - origin.y) * 100) / 100,
 });
 
-// 2 と 3 の段。loose の図形を、desired の位置のまま数の少ない置き方にする
-// 元の置き方がまだ使えるなら、それを最初に試す(書き換えずに済む)
-function tidy(text: string, loose: string[], desired: Map<string, Point>, sizes: PlacedShape[], original: Document) {
-  let next = text;
-  // 候補を作るため、図形を desired の位置に置いた図を用意する
-  const placed = sizes
+// 付け替える図形は、数を書かずに済むなら、元の位置からこの距離まではずれてよい(.zu の綺麗さを優先する)
+const NEARBY = DEFAULT_GAP * 1.5;
+
+// 図形を desired の位置に置いた図。吸着先や置き方の候補を作るのに使う
+function placedAt(sizes: PlacedShape[], desired: Map<string, Point>) {
+  return sizes
     .filter((shape) => desired.has(shape.id))
     .map((shape) => {
       const to = desired.get(shape.id)!;
@@ -69,17 +70,75 @@ function tidy(text: string, loose: string[], desired: Map<string, Point>, sizes:
       const dy = to.y - shape.anchor.y;
       return { ...shape, anchor: to, box: { ...shape.box, x: shape.box.x + dx, y: shape.box.y + dy } };
     });
+}
+
+// affected 以外の図形が desired どおりなら、全図形の位置を desired と同じ座標で返す
+function measure(text: string, desired: Map<string, Point>, affected: Set<string>) {
+  const scene = tryLayout(text);
+  if (!scene) return null;
+  const now = new Map(scene.shapes.map((shape) => [shape.id, shape.anchor]));
+  let offset: Point | null = null;
+  for (const [id, wanted] of desired) {
+    const actual = now.get(id);
+    if (!actual) return null;
+    if (affected.has(id)) continue;
+    offset ??= { x: actual.x - wanted.x, y: actual.y - wanted.y };
+    if (Math.abs(actual.x - offset.x - wanted.x) > TOLERANCE) return null;
+    if (Math.abs(actual.y - offset.y - wanted.y) > TOLERANCE) return null;
+  }
+  const shift = offset ?? { x: 0, y: 0 };
+  return new Map([...now].map(([id, point]) => [id, { x: point.x - shift.x, y: point.y - shift.y }]));
+}
+
+// 2 と 3 の段。loose の図形を数の少ない置き方にする。試す順:
+// 元の置き方でぴったり → 数のいらない置き方で近く(いちばん近いもの) → 間を書いてぴったり → 座標のまま
+// 数のいらない置き方でずれたときは、その図形とそれにつながる図形だけが動く
+function tidy(text: string, loose: string[], desired: Map<string, Point>, sizes: PlacedShape[], original: Document) {
+  let next = text;
+  const replace = (document: Document, statement: ShapeStatement, placement: Placement | null) =>
+    edit.replaceShape(next, document, { ...statement, placement });
 
   for (const id of loose) {
     const document = parse(next);
     const statement = edit.findShape(document, id);
+    const placed = placedAt(sizes, desired);
     const self = placed.find((shape) => shape.id === id);
     if (!statement || !self) continue;
     const excluded = new Set([id, ...edit.dependents(document, id)]);
+
     const before = edit.findShape(original, id)?.placement ?? null;
-    const options: (Placement | null)[] = [before, null, ...placementsFor(placed, self, self.anchor, excluded)];
-    for (const placement of options) {
-      const candidate = edit.replaceShape(next, document, { ...statement, placement });
+    const unchanged = replace(document, statement, before);
+    if (matches(unchanged, desired)) {
+      next = unchanged;
+      continue;
+    }
+
+    const plain: (Placement | null)[] = [
+      null,
+      ...slots(placed, self, excluded).map(
+        (slot): Placement => ({ kind: "beside", direction: slot.direction, of: slot.of, gap: null, at: statement.at }),
+      ),
+    ];
+    let best: { text: string; distance: number; positions: Map<string, Point>; affected: Set<string> } | null = null;
+    for (const placement of plain) {
+      const candidate = replace(document, statement, placement);
+      const affected = new Set([id, ...edit.dependents(parse(candidate), id)]);
+      const positions = measure(candidate, desired, affected);
+      const to = positions?.get(id);
+      if (!positions || !to) continue;
+      const distance = Math.hypot(to.x - self.anchor.x, to.y - self.anchor.y);
+      if (distance <= NEARBY && (!best || distance < best.distance - TOLERANCE)) {
+        best = { text: candidate, distance, positions, affected };
+      }
+    }
+    if (best) {
+      next = best.text;
+      for (const moved of best.affected) desired.set(moved, best.positions.get(moved)!);
+      continue;
+    }
+
+    for (const placement of placementsFor(placed, self, self.anchor, excluded)) {
+      const candidate = replace(document, statement, placement);
       if (matches(candidate, desired)) {
         next = candidate;
         break;

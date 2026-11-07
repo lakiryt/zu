@@ -145,21 +145,43 @@ test("shapes moved together keep their relations, even when the pulled one depen
   assertStayed(text, after, ["b"], "a");
 });
 
+// 付け替えた図形は、数を書かずに済むなら少しずれてよい
+function assertNearby(before: string, after: string, id: string, from: string) {
+  const old = positions(before, from).get(id)!;
+  const now = positions(after, from).get(id)!;
+  assert.ok(Math.hypot(now.x - old.x, now.y - old.y) <= DEFAULT_GAP * 1.5, `${id} が離れすぎました`);
+}
+
 test("moving a shape across its row takes it out of that row only", () => {
   const text = "text a\ntext c right of a by 200\ntext b below a\ncube land below c\nalign row b land\n";
   const delta = slotDelta(text, "land", "right", "c");
   const next = relocate(text, { moved: new Set(["land"]), delta, primary: "land", placement: beside("right", "c") });
   assert.doesNotMatch(next, /align/);
-  assertStayed(text, next, ["a", "b", "c"], "a");
+  assertStayed(text, next, ["a", "c"], "a");
+  // b は land の段に引っ張られていた。段がなくなったので、数を書かずに a の下へ戻る
+  assert.match(next, /^text b below (of )?a$/m);
+  assertNearby(text, next, "b", "a");
 });
 
-test("removing a shape leaves the others where they were", () => {
+test("re-placed shapes prefer a nearby placement without numbers", () => {
+  const text = "text a\ntext b below a\ntext c right of b\n";
+  const delta = slotDelta(text, "a", "right", "c");
+  const next = relocate(text, { moved: new Set(["a"]), delta, primary: "a", placement: beside("right", "c") });
+  assert.doesNotMatch(next, /\bby\b|\bat\b/);
+  // 遠くにしか数なしの置き方がなければ、数を書いて位置を保つ
+  const far = "text a\ntext b below a by 300\ntext c right of a by 300\n";
+  const moved = relocate(far, { moved: new Set(["a"]), delta: slotDelta(far, "a", "right", "c"), primary: "a", placement: beside("right", "c") });
+  assertStayed(far, moved, ["b", "c"], "c");
+});
+
+test("removing a shape leaves the others where they were, or close by without numbers", () => {
   const text = "text a\ntext b below a\ntext c right of b\nalign row b c\n";
   const next = removeShape(text, "b");
   assert.doesNotMatch(next, /\bb\b/);
-  assertStayed(text, next, ["a", "c"], "a");
+  assert.doesNotMatch(next, /\bby\b|\bat\b/);
+  assertNearby(text, next, "c", "a");
   const chain = "text a\ntext b\ntext c\n";
   const shorter = removeShape(chain, "b");
   assert.equal(shorter.trim().split("\n").length, 2);
-  assertStayed(chain, shorter, ["a", "c"], "a");
+  assertNearby(chain, shorter, "c", "a");
 });

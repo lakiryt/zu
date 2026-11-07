@@ -78,7 +78,11 @@ function say(message: string) {
 
 // 図やパネルからの書き換え。誤りになる書き換えは取り消して理由を出す
 function commit(next: string) {
-  if (next === text) return;
+  // 書き換えがなくても描き直す。ドラッグで少しずらした見た目と点線を消すため
+  if (next === text) {
+    draw();
+    return;
+  }
   try {
     layout(parse(next));
   } catch (error) {
