@@ -178,3 +178,55 @@ test("the svg draws line styles and heads", () => {
   // 線は図形より先に(下に)描く
   assert.ok(svg.indexOf('data-line="0"') < svg.indexOf('data-id="a"'));
 });
+
+const overlaps = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+  Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 1e-6 &&
+  Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 1e-6;
+
+test("shapes joined by a labelled line are spaced so the label and arrowheads fit", () => {
+  const plain = place("text a\ntext b right of a\na ---> b");
+  close(plain.b!.x - (plain.a!.x + plain.a!.width), DEFAULT_GAP);
+
+  const scene = layout(parse('text a\ntext b right of a\na <---> b "意思表示"'));
+  const [a, b] = scene.shapes;
+  const gap = b!.box.x - (a!.box.x + a!.box.width);
+  assert.ok(gap > DEFAULT_GAP);
+  const { start, end, labelBox } = scene.lines[0]!;
+  // ラベルは両端の矢先(長さ 12)にかからない
+  assert.ok(labelBox!.x > start.x + 12);
+  assert.ok(labelBox!.x + labelBox!.width < end.x - 12);
+  // by を書けば、その間のまま
+  const fixed = place('text a\ntext b right of a by 10\na ---> b "意思表示"');
+  close(fixed.b!.x - (fixed.a!.x + fixed.a!.width), 10);
+});
+
+test("three shapes joined in a triangle get room for the labels on the other two sides", () => {
+  const source = [
+    'text x "代理人(X)"',
+    'text a "本人(A)" above of x',
+    'text c "相手方(C)" right of x',
+    "a --- x",
+    'a === c "契約成立"',
+    'x ---> c "意思表示"',
+    'x <--- c "意思表示"',
+  ].join("\n");
+  const scene = layout(parse(source));
+  const box = (id: string) => scene.shapes.find((shape) => shape.id === id)!.box;
+  // a と x の間の線にはラベルがないが、a-c と x-c のラベルが積める分だけ広がる
+  assert.ok(box("x").y - (box("a").y + box("a").height) > DEFAULT_GAP * 2);
+
+  const labels = scene.lines.flatMap(({ labelBox }) => (labelBox ? [labelBox] : []));
+  assert.equal(labels.length, 3);
+  for (const [index, label] of labels.entries()) {
+    for (const other of labels.slice(index + 1)) assert.ok(!overlaps(label, other), "ラベルどうしが重なっています");
+    for (const shape of scene.shapes) assert.ok(!overlaps(label, shape.box), `ラベルが ${shape.id} に重なっています`);
+  }
+  // 平行な2本のラベルは、2本の外側に上下に分かれる
+  const [, , upper, lower] = scene.lines;
+  const sides = [upper!, lower!].map(({ labelBox, start }) => Math.sign(labelBox!.y + labelBox!.height / 2 - start.y));
+  assert.deepEqual(sides.sort(), [-1, 1]);
+});
+
+test("the default gap follows the font size", () => {
+  close(DEFAULT_GAP, 16 * 2.5);
+});

@@ -13,11 +13,15 @@ function reach({ box, anchor }: PlacedShape) {
   };
 }
 
+// 間を書かずに置くときの間。of の図形の direction に置く場合。配置の段の defaultGap と同じにする
+export type GapOf = (of: string, direction: Direction) => number;
+const fixedGap: GapOf = () => DEFAULT_GAP;
+
 // 吸着先。dragged をそこへ置いたときの本体の中心(anchor)を持つ
 export type Slot = { direction: Direction; of: string; anchor: Point; gap: number | null };
 
 // 既定の間で、ほかの図形の上下左右に置いたときの位置
-export function slots(shapes: PlacedShape[], dragged: PlacedShape, excluded: Set<string>): Slot[] {
+export function slots(shapes: PlacedShape[], dragged: PlacedShape, excluded: Set<string>, gapOf: GapOf = fixedGap): Slot[] {
   const self = reach(dragged);
   const result: Slot[] = [];
   for (const shape of shapes) {
@@ -26,10 +30,10 @@ export function slots(shapes: PlacedShape[], dragged: PlacedShape, excluded: Set
     const { x, y } = shape.anchor;
     const of = shape.id;
     result.push(
-      { direction: "right", of, gap: null, anchor: { x: x + other.right + DEFAULT_GAP + self.left, y } },
-      { direction: "left", of, gap: null, anchor: { x: x - other.left - DEFAULT_GAP - self.right, y } },
-      { direction: "below", of, gap: null, anchor: { x, y: y + other.bottom + DEFAULT_GAP + self.top } },
-      { direction: "above", of, gap: null, anchor: { x, y: y - other.top - DEFAULT_GAP - self.bottom } },
+      { direction: "right", of, gap: null, anchor: { x: x + other.right + gapOf(of, "right") + self.left, y } },
+      { direction: "left", of, gap: null, anchor: { x: x - other.left - gapOf(of, "left") - self.right, y } },
+      { direction: "below", of, gap: null, anchor: { x, y: y + other.bottom + gapOf(of, "below") + self.top } },
+      { direction: "above", of, gap: null, anchor: { x, y: y - other.top - gapOf(of, "above") - self.bottom } },
     );
   }
   return result;
@@ -54,13 +58,19 @@ const EXACT = 0.05;
 // self の本体の中心を anchor に置く置き方の候補。数の少ないものから並べる。
 // 1. ほかの図形の上下左右に既定の間で置くとぴったり合うもの(数なし)
 // 2. 縦か横がほかの図形と揃っていて、間を書けば合うもの(間の狭い順)
-export function placementsFor(shapes: PlacedShape[], self: PlacedShape, anchor: Point, excluded: Set<string>): Placement[] {
+export function placementsFor(
+  shapes: PlacedShape[],
+  self: PlacedShape,
+  anchor: Point,
+  excluded: Set<string>,
+  gapOf: GapOf = fixedGap,
+): Placement[] {
   const mine = reach(self);
   const exact: Placement[] = [];
   const spaced: { placement: Placement; gap: number }[] = [];
   for (const shape of shapes) {
     if (shape.id === self.id || excluded.has(shape.id)) continue;
-    for (const slot of slots([shape], self, new Set())) {
+    for (const slot of slots([shape], self, new Set(), gapOf)) {
       if (Math.abs(slot.anchor.x - anchor.x) < EXACT && Math.abs(slot.anchor.y - anchor.y) < EXACT) {
         exact.push({ kind: "beside", direction: slot.direction, of: shape.id, gap: null, at: NOWHERE });
       }

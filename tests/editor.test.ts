@@ -3,7 +3,7 @@ import { test } from "node:test";
 import * as edit from "../editor/edit.ts";
 import { relocate, removeShape } from "../editor/relocate.ts";
 import { nearest, placementsFor, slide, slots } from "../editor/snap.ts";
-import { DEFAULT_GAP, layout } from "../src/layout/layout.ts";
+import { DEFAULT_GAP, defaultGap, layout } from "../src/layout/layout.ts";
 import { parse } from "../src/syntax/parser.ts";
 
 const close = (actual: number, expected: number) =>
@@ -196,4 +196,20 @@ test("lines follow renames and disappear with their shapes", () => {
   const changed = edit.replaceLine(added, document, 1, { ...edit.lines(document)[1]!, arrow: { style: "dotted", start: "dot", end: "filled" } });
   assert.match(changed, /^b o-.->> a$/m);
   assert.equal(edit.lineAtLine(document, 3), 0);
+});
+
+test("snapping beside a shape uses the same widened gap as the layout", () => {
+  const text = 'text a\ntext b at 0 200\na ---> b "意思表示"\n';
+  const document = parse(text);
+  const scene = layout(document);
+  const b = scene.shapes[1]!;
+  const gapOf = (of: string, direction: Direction) => defaultGap(document, "b", of, direction);
+  const slot = slots(scene.shapes, b, new Set(), gapOf).find((s) => s.of === "a" && s.direction === "right")!;
+  const delta = { x: slot.anchor.x - b.anchor.x, y: slot.anchor.y - b.anchor.y };
+  const next = relocate(text, { moved: new Set(["b"]), delta, primary: "b", placement: beside("right", "a") });
+  assert.match(next, /^text b right of a$/m);
+  const after = positions(next, "a").get("b")!;
+  const wanted = { x: slot.anchor.x - scene.shapes[0]!.anchor.x, y: slot.anchor.y - scene.shapes[0]!.anchor.y };
+  close(after.x, wanted.x);
+  close(after.y, wanted.y);
 });

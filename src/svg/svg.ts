@@ -1,4 +1,5 @@
 import type { PlacedLine, PlacedShape, Scene } from "../layout/layout.ts";
+import { HEAD } from "../layout/lines.ts";
 import type { Head } from "../syntax/ast.ts";
 import { FONT_SIZE, LINE_HEIGHT, labelLines } from "../layout/measure.ts";
 
@@ -95,11 +96,10 @@ function draw({ label: text, box, geometry }: PlacedShape) {
   }
 }
 
-// 線の太さ、点線の間隔、二重線の2本の中心どうしの間、矢先の大きさ。二重線は矢先を少し大きくし、2本を覆う
+// 線の太さ、点線の間隔、二重線の2本の中心どうしの間。矢先の大きさは配置の段(HEAD)が決める
 const STROKE_WIDTH = { solid: 1.5, dotted: 1.5, double: 1.2 };
 const DASH = "2 4";
 const DOUBLE_GAP = 3.5;
-const HEAD = { length: 12, width: 10, radius: 4, doubleScale: 1.35 };
 
 type Vector = { x: number; y: number };
 

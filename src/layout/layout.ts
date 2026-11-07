@@ -1,8 +1,8 @@
 import { ZuError } from "../errors.ts";
 import type { AlignStatement, Direction, Document, Shape, ShapeStatement } from "../syntax/ast.ts";
-import { placeLines } from "./lines.ts";
+import { placeLines, roomFor } from "./lines.ts";
 import type { PlacedLine } from "./lines.ts";
-import { measureText } from "./measure.ts";
+import { FONT_SIZE, measureText } from "./measure.ts";
 
 export type { PlacedLine } from "./lines.ts";
 
@@ -24,7 +24,16 @@ export type PlacedShape = { id: string; label: string; box: Box; anchor: Point; 
 // origin は書いた座標の (0, 0) が図のどこに来たか。全体を余白の内側へずらした量でもある
 export type Scene = { width: number; height: number; origin: Point; shapes: PlacedShape[]; lines: PlacedLine[] };
 
-export const DEFAULT_GAP = 40;
+// 既定の間は字の大きさから決める(16 の字で 40)。字を大きくすれば、間も同じ割合で広がる
+export const DEFAULT_GAP = FONT_SIZE * 2.5;
+
+// 間を書かずに from を to の direction に置くときの間。2つを結ぶ線にラベルがあれば、
+// ラベルと矢先が収まるよう広げる
+export function defaultGap(document: Document, from: string, to: string, direction: Direction) {
+  const lines = document.statements.filter((statement) => statement.kind === "line");
+  const coord = direction === "left" || direction === "right" ? "x" : "y";
+  return Math.max(DEFAULT_GAP, roomFor(lines, from, to, coord));
+}
 export const PADDING = 20;
 const PARALLELOGRAM = { minWidth: 120, height: 60, padding: 24, skewRatio: 0.5 };
 const CUBE = { edge: 60, depthRatio: 0.3, labelGap: 6 };
@@ -107,10 +116,12 @@ export function layout(document: Document): Scene {
       if (placement?.kind === "at") return [statement.id, null];
       if (placement) {
         const base = byId.get(placement.of)!;
-        return [statement.id, { base, direction: placement.direction, gap: placement.gap ?? DEFAULT_GAP }];
+        const gap = placement.gap ?? defaultGap(document, statement.id, base.id, placement.direction);
+        return [statement.id, { base, direction: placement.direction, gap }];
       }
       const previous = statements[index - 1];
-      return [statement.id, previous ? { base: previous, direction: "right", gap: DEFAULT_GAP } : null];
+      if (!previous) return [statement.id, null];
+      return [statement.id, { base: previous, direction: "right", gap: defaultGap(document, statement.id, previous.id, "right") }];
     }),
   );
 
@@ -216,7 +227,12 @@ export function layout(document: Document): Scene {
 
   const lines = placeLines(
     document.statements.filter((statement) => statement.kind === "line"),
-    new Map(placed.map(({ statement, size, anchor, box }) => [statement.id, { id: statement.id, anchor, body: bodyOf(size, anchor, box) }])),
+    new Map(
+      placed.map(({ statement, size, anchor, box }) => [
+        statement.id,
+        { id: statement.id, anchor, body: bodyOf(size, anchor, box), box },
+      ]),
+    ),
   );
 
   // 図の範囲は、図形の外枠と、線の端と、線のラベルの下地が入る大きさ

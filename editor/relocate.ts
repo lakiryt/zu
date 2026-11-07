@@ -8,9 +8,9 @@
 //    だめなら間を書いた関係で位置をぴったり保ち、それもだめなら座標のまま残す
 // 3. 座標が1つだけ残り、それを最初の図形にできるなら、置き方なしにする
 import { ZuError } from "../src/errors.ts";
-import { DEFAULT_GAP, layout } from "../src/layout/layout.ts";
+import { DEFAULT_GAP, defaultGap, layout } from "../src/layout/layout.ts";
 import type { PlacedShape, Point, Scene } from "../src/layout/layout.ts";
-import type { Document, Placement, ShapeStatement, Statement } from "../src/syntax/ast.ts";
+import type { Direction, Document, Placement, ShapeStatement, Statement } from "../src/syntax/ast.ts";
 import { parse } from "../src/syntax/parser.ts";
 import { print } from "../src/syntax/print.ts";
 import * as edit from "./edit.ts";
@@ -105,6 +105,7 @@ function tidy(text: string, loose: string[], desired: Map<string, Point>, sizes:
     const self = placed.find((shape) => shape.id === id);
     if (!statement || !self) continue;
     const excluded = new Set([id, ...edit.dependents(document, id)]);
+    const gapOf = (of: string, direction: Direction) => defaultGap(document, id, of, direction);
 
     const before = edit.findShape(original, id)?.placement ?? null;
     const unchanged = replace(document, statement, before);
@@ -115,7 +116,7 @@ function tidy(text: string, loose: string[], desired: Map<string, Point>, sizes:
 
     const plain: (Placement | null)[] = [
       null,
-      ...slots(placed, self, excluded).map(
+      ...slots(placed, self, excluded, gapOf).map(
         (slot): Placement => ({ kind: "beside", direction: slot.direction, of: slot.of, gap: null, at: statement.at }),
       ),
     ];
@@ -137,7 +138,7 @@ function tidy(text: string, loose: string[], desired: Map<string, Point>, sizes:
       continue;
     }
 
-    for (const placement of placementsFor(placed, self, self.anchor, excluded)) {
+    for (const placement of placementsFor(placed, self, self.anchor, excluded, gapOf)) {
       const candidate = replace(document, statement, placement);
       if (matches(candidate, desired)) {
         next = candidate;

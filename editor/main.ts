@@ -1,5 +1,6 @@
 // エディタの画面。正本は左の .zu の文字で、図の操作は文字を書き換えてから描き直す
 import { ZuError, layout, parse, toSvg } from "../src/index.ts";
+import { defaultGap } from "../src/layout/layout.ts";
 import type { PlacedShape, Point, Scene } from "../src/layout/layout.ts";
 import { HEADS, LINE_STYLES, SHAPES } from "../src/syntax/ast.ts";
 import type { Direction, Document, Head, LineStatement, LineStyle, Placement, Shape, ShapeStatement } from "../src/syntax/ast.ts";
@@ -303,7 +304,7 @@ stage.addEventListener("pointerdown", (event) => {
     start: pointIn(root, event),
     moved: false,
     moving,
-    slots: slots(scene.shapes, shape, moving),
+    slots: slots(scene.shapes, shape, moving, (of, direction) => defaultGap(parsed!, id, of, direction)),
     target: null,
     narrow,
   };
