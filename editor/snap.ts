@@ -1,7 +1,7 @@
 // ドラッグしたときの吸着先を、配置済みの図(Scene)から求める。DOM を知らない
 import { DEFAULT_GAP } from "../src/layout/layout.ts";
 import type { PlacedShape, Point } from "../src/layout/layout.ts";
-import type { Direction } from "../src/syntax/ast.ts";
+import type { Direction, Placement } from "../src/syntax/ast.ts";
 
 // 本体の中心から外枠の四辺まで
 function reach({ box, anchor }: PlacedShape) {
@@ -46,6 +46,40 @@ export function nearest(candidates: Slot[], point: Point, radius: number) {
     }
   }
   return best;
+}
+
+const NOWHERE = { line: 0, column: 0 };
+const EXACT = 0.05;
+
+// self の本体の中心を anchor に置く置き方の候補。数の少ないものから並べる。
+// 1. ほかの図形の上下左右に既定の間で置くとぴったり合うもの(数なし)
+// 2. 縦か横がほかの図形と揃っていて、間を書けば合うもの(間の狭い順)
+export function placementsFor(shapes: PlacedShape[], self: PlacedShape, anchor: Point, excluded: Set<string>): Placement[] {
+  const mine = reach(self);
+  const exact: Placement[] = [];
+  const spaced: { placement: Placement; gap: number }[] = [];
+  for (const shape of shapes) {
+    if (shape.id === self.id || excluded.has(shape.id)) continue;
+    for (const slot of slots([shape], self, new Set())) {
+      if (Math.abs(slot.anchor.x - anchor.x) < EXACT && Math.abs(slot.anchor.y - anchor.y) < EXACT) {
+        exact.push({ kind: "beside", direction: slot.direction, of: shape.id, gap: null, at: NOWHERE });
+      }
+    }
+    const other = reach(shape);
+    const add = (direction: Direction, gap: number) => {
+      if (gap >= 0) spaced.push({ placement: { kind: "beside", direction, of: shape.id, gap: Math.round(gap * 100) / 100, at: NOWHERE }, gap });
+    };
+    if (Math.abs(shape.anchor.y - anchor.y) < EXACT) {
+      if (anchor.x >= shape.anchor.x) add("right", anchor.x - mine.left - (shape.anchor.x + other.right));
+      else add("left", shape.anchor.x - other.left - (anchor.x + mine.right));
+    }
+    if (Math.abs(shape.anchor.x - anchor.x) < EXACT) {
+      if (anchor.y >= shape.anchor.y) add("below", anchor.y - mine.top - (shape.anchor.y + other.bottom));
+      else add("above", shape.anchor.y - other.top - (anchor.y + mine.bottom));
+    }
+  }
+  spaced.sort((a, b) => a.gap - b.gap);
+  return [...exact, ...spaced.map(({ placement }) => placement)];
 }
 
 // 基準の向きの線の上だけを動かし、間(by)を求める。間は 0 より狭くしない

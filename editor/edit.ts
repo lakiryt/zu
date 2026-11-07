@@ -109,25 +109,6 @@ export function rename(text: string, document: Document, from: string, to: strin
   });
 }
 
-// 消す。揃えからは外し(残りが1つになった揃えは消す)、この図形を基準にしていた図形は、
-// 消す図形の置き方を引き継ぐ。ただし基準が自分自身になる場合は置き方を外す
-export function remove(text: string, document: Document, id: string) {
-  const target = findShape(document, id);
-  if (!target) return text;
-  return rewrite(text, document, (statement) => {
-    if (statement.kind === "align") {
-      if (!statement.members.some((m) => m.id === id)) return undefined;
-      const members = statement.members.filter((m) => m.id !== id);
-      return members.length < 2 ? null : { ...statement, members };
-    }
-    if (statement.id === id) return null;
-    if (statement.placement?.kind !== "beside" || statement.placement.of !== id) return undefined;
-    const inherited = target.placement;
-    const selfRef = inherited?.kind === "beside" && inherited.of === statement.id;
-    return { ...statement, placement: selfRef ? null : inherited };
-  });
-}
-
 // 揃えを足す。同じ向きの揃えに既に入っている図形があれば、その揃えに加える
 export function addAlign(text: string, document: Document, axis: "row" | "column", ids: string[]) {
   const existing = document.statements.find(

@@ -4,6 +4,8 @@ import type { PlacedShape, Point, Scene } from "../src/layout/layout.ts";
 import { SHAPES } from "../src/syntax/ast.ts";
 import type { Direction, Document, Placement, Shape, ShapeStatement } from "../src/syntax/ast.ts";
 import * as edit from "./edit.ts";
+import { relocate, removeShape } from "./relocate.ts";
+import type { Move } from "./relocate.ts";
 import { nearest, slide, slots } from "./snap.ts";
 import type { Slot } from "./snap.ts";
 
@@ -236,7 +238,8 @@ type Drag = {
   shape: PlacedShape;
   start: Point;
   moved: boolean;
-  followers: Set<string>;
+  // 一緒に動かす図形(複数選んでいればその全部)。ほかの図形は動かない
+  moving: Set<string>;
   slots: Slot[];
   target: Target;
   // 選んである図形を Shift なしで押した。動かさずに離したら、それだけを選び直す
@@ -264,13 +267,13 @@ stage.addEventListener("pointerdown", (event) => {
   renderToolbar();
 
   const shape = scene.shapes.find((other) => other.id === id)!;
-  const followers = edit.dependents(parsed, id);
+  const moving = new Set(selected.includes(id) && selected.length > 1 ? selected : [id]);
   drag = {
     shape,
     start: pointIn(root, event),
     moved: false,
-    followers,
-    slots: slots(scene.shapes, shape, followers),
+    moving,
+    slots: slots(scene.shapes, shape, moving),
     target: null,
     narrow,
   };
@@ -287,8 +290,7 @@ stage.addEventListener("pointermove", (event) => {
   if (!drag.moved && Math.hypot(dx, dy) < 3) return;
   drag.moved = true;
 
-  // ついてくる図形も一緒に動かして見せる
-  for (const id of [drag.shape.id, ...drag.followers]) {
+  for (const id of drag.moving) {
     root.querySelector(`g[data-id="${CSS.escape(id)}"]`)?.setAttribute("transform", `translate(${dx} ${dy})`);
   }
   const anchor = { x: drag.shape.anchor.x + dx, y: drag.shape.anchor.y + dy };
@@ -314,7 +316,7 @@ stage.addEventListener("pointerup", () => {
     draw();
     return;
   }
-  place(current.shape.id, current.target);
+  place(current, current.target);
 });
 
 function aim(current: Drag, anchor: Point, free: boolean): Target {
@@ -366,15 +368,37 @@ function drawGhost(root: SVGSVGElement, current: Drag) {
   overlay.appendChild(caption);
 }
 
-function place(id: string, target: NonNullable<Target>) {
+function place(current: Drag, target: NonNullable<Target>) {
   if (!parsed) return;
-  const statement = edit.findShape(parsed, id);
+  const { shape } = current;
+  const statement = edit.findShape(parsed, shape.id);
   if (!statement) return;
   const placement: Placement =
     target.kind === "at"
       ? { kind: "at", x: target.written.x, y: target.written.y }
       : { kind: "beside", direction: target.slot.direction, of: target.slot.of, gap: target.slot.gap, at: statement.at };
-  commit(edit.replaceShape(text, parsed, { ...statement, placement }));
+  const anchor = target.kind === "at" ? target.anchor : target.slot.anchor;
+  move({
+    moved: current.moving,
+    delta: { x: anchor.x - shape.anchor.x, y: anchor.y - shape.anchor.y },
+    primary: shape.id,
+    placement,
+  });
+}
+
+// 図形を動かす。ほかの図形はその場に残す
+function move(request: Move) {
+  try {
+    commit(relocate(text, request));
+  } catch (error) {
+    if (!(error instanceof ZuError)) throw error;
+    say(error.reason);
+    draw();
+  }
+}
+
+function setPlacement(statement: ShapeStatement, placement: Placement | null) {
+  move({ moved: new Set([statement.id]), delta: null, primary: statement.id, placement });
 }
 
 // --- パネル ---
@@ -428,8 +452,8 @@ function renderPanel() {
       html(
         "ul",
         { class: "help" },
-        html("li", {}, "ドラッグ: ほかの図形の上下左右に寄せて置く"),
-        html("li", {}, "Shift+クリック: いくつも選ぶ(揃えに使う)"),
+        html("li", {}, "ドラッグ: ほかの図形の上下左右に寄せて置く(ほかの図形は動かない)"),
+        html("li", {}, "Shift+クリック: いくつも選ぶ。まとめてドラッグすると、互いの位置を保って動く"),
         html("li", {}, "Alt+ドラッグ: 数で置く(間や座標)"),
       ),
     );
@@ -482,7 +506,7 @@ function renderPanel() {
 
   const placementRow = html("div", { class: "field" }, html("span", {}, "置き方"), html("span", { class: "value" }, describePlacement(statement)));
   if (statement.placement) {
-    placementRow.append(button("外す", () => update1(statement, { placement: null }), { class: "small" }));
+    placementRow.append(button("外す", () => setPlacement(statement, null), { class: "small" }));
   }
   panel.append(placementRow);
 
@@ -508,7 +532,7 @@ function renderPanel() {
   const { placement, size } = statement;
   if (placement?.kind === "beside") {
     advanced.append(
-      numberField("間", placement.gap, "既定 40", (gap) => update1(statement, { placement: { ...placement, gap } })),
+      numberField("間", placement.gap, "既定 40", (gap) => setPlacement(statement, { ...placement, gap })),
     );
   }
   const at = placement?.kind === "at" ? placement : null;
@@ -516,7 +540,7 @@ function renderPanel() {
     if (value === null) return;
     const x = axis === "x" ? value : (at?.x ?? 0);
     const y = axis === "y" ? value : (at?.y ?? 0);
-    update1(statement, { placement: { kind: "at", x, y } });
+    setPlacement(statement, { kind: "at", x, y });
   };
   advanced.append(
     html(
@@ -549,10 +573,15 @@ function renderPanel() {
 
 function removeSelected() {
   if (!parsed || selected.length === 0) return;
-  let next = text;
-  for (const id of selected) next = edit.remove(next, parse(next), id);
-  selected = [];
-  commit(next);
+  try {
+    let next = text;
+    for (const id of selected) next = removeShape(next, id);
+    selected = [];
+    commit(next);
+  } catch (error) {
+    if (!(error instanceof ZuError)) throw error;
+    say(error.reason);
+  }
 }
 
 function addShape(shape: Shape) {
