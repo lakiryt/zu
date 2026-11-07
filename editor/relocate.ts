@@ -7,12 +7,8 @@
 //    元の位置の近くに置けるならそれを選び、少しずれるのは許す(.zu の綺麗さを優先する)。
 //    だめなら間を書いた関係で位置をぴったり保ち、それもだめなら座標のまま残す
 // 3. 座標が1つだけ残り、それを最初の図形にできるなら、置き方なしにする
-import { ZuError } from "../src/errors.ts";
-import { DEFAULT_GAP, defaultGap, layout } from "../src/layout/layout.ts";
-import type { PlacedShape, Point, Scene } from "../src/layout/layout.ts";
-import type { Direction, Document, Placement, ShapeStatement, Statement } from "../src/syntax/ast.ts";
-import { parse } from "../src/syntax/parser.ts";
-import { print } from "../src/syntax/print.ts";
+import { DEFAULT_GAP, ZuError, defaultGap, layout, parse, print } from "../src/index.ts";
+import type { Direction, Document, PlacedShape, Placement, Point, Scene, ShapeStatement, Statement } from "../src/index.ts";
 import * as edit from "./edit.ts";
 import { placementsFor, slots } from "./snap.ts";
 
@@ -41,14 +37,6 @@ function matches(text: string, desired: Map<string, Point>) {
     if (Math.abs(actual.y - offset.y - wanted.y) > TOLERANCE) return false;
   }
   return true;
-}
-
-// 位置を決める基準の図形。at と最初の図形には基準がない
-function baseOf(list: ShapeStatement[], index: number) {
-  const { placement } = list[index]!;
-  if (placement?.kind === "at") return null;
-  if (placement) return placement.of;
-  return list[index - 1]?.id ?? null;
 }
 
 const atPoint = (point: Point, origin: Point): Placement => ({
@@ -245,7 +233,7 @@ export function relocate(text: string, { moved, delta, primary, placement }: Mov
     .filter((statement, index) => {
       if (statement.id === primary) return false;
       if (unsettled.has(statement.id)) return true;
-      const base = baseOf(list, index);
+      const base = edit.baseOf(list, index);
       if (moved.has(statement.id)) return base === null || !moved.has(base);
       return base !== null && moved.has(base);
     })
@@ -256,7 +244,7 @@ export function relocate(text: string, { moved, delta, primary, placement }: Mov
   );
 
   const after = tryLayout(next);
-  if (!after) throw new ZuError("ここには置けません", { line: 1, column: 1 });
+  if (!after) throw new edit.EditError("ここには置けません");
   if (!delta) {
     // primary の行き先は、ほかの図形との相対で決める
     const reference = scene.shapes.find((shape) => shape.id !== primary);
@@ -268,7 +256,7 @@ export function relocate(text: string, { moved, delta, primary, placement }: Mov
       desired.set(primary, at);
     }
   }
-  if (!matches(next, desired)) throw new ZuError("ここには置けません(揃えと合いません)", { line: 1, column: 1 });
+  if (!matches(next, desired)) throw new edit.EditError("ここには置けません(揃えと合いません)");
 
   return tidy(next, loose, desired, scene.shapes, document);
 }
@@ -284,12 +272,12 @@ export function removeShape(text: string, id: string) {
     align.members.some((member) => member.id === id) ? new Set([id]) : new Set(),
   );
   const loose = list
-    .filter((statement, index) => statement.id !== id && (unsettled.has(statement.id) || baseOf(list, index) === id))
+    .filter((statement, index) => statement.id !== id && (unsettled.has(statement.id) || edit.baseOf(list, index) === id))
     .map((statement) => statement.id);
 
   const next = pinDown(text, document, changes, loose, desired, scene.origin, (statement) =>
     statement.id === id ? null : undefined, id,
   );
-  if (desired.size > 0 && !matches(next, desired)) throw new ZuError("消せませんでした", { line: 1, column: 1 });
+  if (desired.size > 0 && !matches(next, desired)) throw new edit.EditError("消せませんでした");
   return tidy(next, loose, desired, scene.shapes, document);
 }

@@ -1,7 +1,6 @@
 // ドラッグしたときの吸着先を、配置済みの図(Scene)から求める。DOM を知らない
-import { DEFAULT_GAP } from "../src/layout/layout.ts";
-import type { PlacedShape, Point } from "../src/layout/layout.ts";
-import type { Direction, Placement } from "../src/syntax/ast.ts";
+import { DEFAULT_GAP } from "../src/index.ts";
+import type { Direction, PlacedShape, Placement, Point } from "../src/index.ts";
 
 // 本体の中心から外枠の四辺まで
 function reach({ box, anchor }: PlacedShape) {

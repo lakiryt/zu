@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as edit from "../editor/edit.ts";
+import { History } from "../editor/history.ts";
 import { relocate, removeShape } from "../editor/relocate.ts";
+import { Editor } from "../editor/state.ts";
 import { nearest, placementsFor, slide, slots } from "../editor/snap.ts";
 import { DEFAULT_GAP, defaultGap, layout } from "../src/layout/layout.ts";
 import { parse } from "../src/syntax/parser.ts";
@@ -212,4 +214,38 @@ test("snapping beside a shape uses the same widened gap as the layout", () => {
   const wanted = { x: slot.anchor.x - scene.shapes[0]!.anchor.x, y: slot.anchor.y - scene.shapes[0]!.anchor.y };
   close(after.x, wanted.x);
   close(after.y, wanted.y);
+});
+
+test("history steps back and forth, and a new change drops the redo side", () => {
+  const history = new History();
+  assert.equal(history.canUndo, false);
+  history.record("a");
+  history.record("b");
+  assert.equal(history.undo("c"), "b");
+  assert.equal(history.undo("b"), "a");
+  assert.equal(history.undo("a"), undefined);
+  assert.equal(history.redo("a"), "b");
+  history.record("b");
+  assert.equal(history.canRedo, false);
+});
+
+test("the editor keeps the text as the source and refuses edits that break it", () => {
+  const messages: string[] = [];
+  const editor = new Editor("text a\ntext b below a\n", (message) => messages.push(message));
+  const changes: string[] = [];
+  editor.listen((change) => changes.push(change));
+  editor.reload();
+  editor.select({ kind: "shapes", ids: ["a", "b"] });
+  assert.deepEqual(changes, ["text", "selection"]);
+
+  // 循環になる書き換えは入れず、理由を出す
+  editor.commit("text a below b\ntext b below a\n");
+  assert.equal(editor.text, "text a\ntext b below a\n");
+  assert.match(messages[0]!, /循環/);
+
+  // 消えた図形は選んでいるものから外れる
+  editor.commit("text a\n");
+  assert.deepEqual(editor.selection, { kind: "shapes", ids: ["a"] });
+  editor.undo();
+  assert.equal(editor.text, "text a\ntext b below a\n");
 });

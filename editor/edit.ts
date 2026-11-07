@@ -1,6 +1,6 @@
 // .zu の文字を、文の単位で書き換える。DOM を知らないので Node でも試せる
-import { print } from "../src/syntax/print.ts";
-import type { Arrow, Document, LineStatement, ShapeStatement, SourcePosition, Statement } from "../src/syntax/ast.ts";
+import { print } from "../src/index.ts";
+import type { Arrow, Document, LineStatement, ShapeStatement, SourcePosition, Statement } from "../src/index.ts";
 
 // 行と列(1から、字は code point で数える)を文字列の添字にする
 export function offsetOf(text: string, { line, column }: SourcePosition) {
@@ -55,6 +55,20 @@ export function freshId(document: Document, base = "図形") {
   for (let n = 1; ; n++) if (!used.has(`${base}${n}`)) return `${base}${n}`;
 }
 
+// 図の操作が書き換えにならなかったときの誤り。文字の誤り(ZuError)と違い、行と列を持たない
+export class EditError extends Error {
+  override readonly name = "EditError";
+}
+
+// 位置を決める基準の図形(list は図形の文を書いた順に並べたもの)。
+// 置き方がなければ直前の図形。at の図形と最初の図形には基準がない
+export function baseOf(list: ShapeStatement[], index: number) {
+  const { placement } = list[index]!;
+  if (placement?.kind === "at") return null;
+  if (placement) return placement.of;
+  return list[index - 1]?.id ?? null;
+}
+
 // 数を書いている図形か(エディタで印を付ける)
 export function usesNumbers(statement: ShapeStatement) {
   const { placement, size } = statement;
@@ -65,25 +79,18 @@ export function usesNumbers(statement: ShapeStatement) {
 // 置き方のない図形は直前の図形に従う
 export function dependents(document: Document, id: string) {
   const list = shapes(document);
-  const baseOf = new Map<string, string | null>(
-    list.map((statement, index) => {
-      const { placement } = statement;
-      if (placement?.kind === "at") return [statement.id, null];
-      if (placement) return [statement.id, placement.of];
-      return [statement.id, list[index - 1]?.id ?? null];
-    }),
-  );
+  const bases = new Map(list.map((statement, index) => [statement.id, baseOf(list, index)]));
   const result = new Set<string>();
   for (const { id: start } of list) {
     const seen = new Set<string>();
-    let current = baseOf.get(start) ?? null;
+    let current = bases.get(start) ?? null;
     while (current !== null && !seen.has(current)) {
       if (current === id) {
         result.add(start);
         break;
       }
       seen.add(current);
-      current = baseOf.get(current) ?? null;
+      current = bases.get(current) ?? null;
     }
   }
   result.delete(id);

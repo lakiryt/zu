@@ -1,10 +1,8 @@
 // 線の端の位置とラベルの場所を決める。図形の位置には、ラベルの入る間(roomFor)を通してだけ影響する
 import { ZuError } from "../errors.ts";
 import type { Arrow, Head, LineStatement } from "../syntax/ast.ts";
+import type { Box, Point } from "./geometry.ts";
 import { measureText } from "./measure.ts";
-
-type Point = { x: number; y: number };
-type Box = { x: number; y: number; width: number; height: number };
 
 // start は from の側の端、end は to の側の端。線は図形の本体の手前で切ってある
 export type PlacedLine = {
