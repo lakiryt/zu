@@ -11,6 +11,7 @@
 - `src/svg/`: 配置済みの図形を SVG の文字列にする。大きさや位置を計算し直さない
 - `src/errors.ts`: どの段の誤りも `ZuError`(行と列)で報告する
 - `cli.ts`: ファイルを読んで SVG を書く入口
+- `editor/`: ブラウザのエディタ(Vite で束ねる)。3段を使う側で、`src/` から editor を参照しない。文字の書き換え(`edit.ts`)と吸着の計算(`snap.ts`)は DOM を使わず、`tests/editor.test.ts` で試す
 
 ## コマンド
 
@@ -19,12 +20,15 @@ npm install          # 型チェック用の TypeScript を入れる
 npm test             # tests/*.test.ts
 npm run typecheck
 node cli.ts examples/agency.zu examples/agency.svg
+npm run dev          # エディタ(Vite)
+npm run build        # editor/dist に書き出す(Vercel はこれを出す)
 ```
 
 ## ルール
 
-- 実行時の依存パッケージを足さない。Node 24 で .ts をそのまま動かす(`erasableSyntaxOnly` に収まる書き方にする)
+- 実行時の依存パッケージを足さない(エディタも含む。Vite は開発用)。Node 24 で .ts をそのまま動かす(`erasableSyntaxOnly` に収まる書き方にする)
 - 言語の語(図形の名前、キーワード)は特定の分野に寄せない。法律の図にも使うが、`text`、`cube` のように見た目で名付ける
 - 文法や意味を変えたら SPEC.md も直す。例(`examples/`)の SVG も出し直す
 - 誤りの文言、コメント、文書は日本語
 - テストは段ごとに `tests/` に書く。見た目を変えたら、SVG をブラウザで開いて確かめる
+- エディタは、数を書かない操作を既定にする。数の指定は「高度な設定」と Alt+ドラッグに留める([docs/design/editor.md](docs/design/editor.md))

@@ -4,6 +4,7 @@ import { ZuError } from "../src/errors.ts";
 import { tokenize } from "../src/syntax/lexer.ts";
 import { parse } from "../src/syntax/parser.ts";
 import type { ShapeStatement } from "../src/syntax/ast.ts";
+import { print } from "../src/syntax/print.ts";
 
 const kinds = (source: string) => tokenize(source).map(({ type, value }) => `${type}:${value}`);
 
@@ -42,7 +43,7 @@ test("a statement holds the shape, name, label, placement and size", () => {
   assert.deepEqual(
     statements.map((statement) => {
       assert.equal(statement.kind, "shape");
-      const { at: _, ...rest } = statement as ShapeStatement;
+      const { at: _, end: __, ...rest } = statement as ShapeStatement;
       return { ...rest, placement: rest.placement && { ...rest.placement, at: undefined } };
     }),
     [
@@ -84,6 +85,7 @@ test("an align statement lists the axis and the shapes with their places", () =>
       { id: "item", at: { line: 1, column: 19 } },
     ],
     at: { line: 1, column: 1 },
+    end: { line: 1, column: 23 },
   });
   assert.equal(parse("align column a b").statements[0]?.kind, "align");
 });
@@ -101,4 +103,26 @@ test("syntax errors name what was expected", () => {
   assertError("text a at 1", 1, 12, /y 座標が必要です/);
   assertError("text a at 1 2 below b", 1, 15, /置き方は1つの図形に1つまでです/);
   assertError("text a color red", 1, 8, /「color」は使えません/);
+});
+
+test("a statement ends before a trailing comment", () => {
+  const [statement] = parse('text a "本人" below b %% メモ\n').statements;
+  assert.deepEqual(statement?.end, { line: 1, column: 20 });
+});
+
+test("printing a statement gives back the same statement", () => {
+  const sources = [
+    'text a "本人\\n(\\"A\\")" at 10 -20.5',
+    "cube b right of a by 30 size 50",
+    "parallelogram c below of of size 120 40",
+    "text d",
+    "align column a b c",
+  ];
+  for (const source of sources) {
+    const [statement] = parse(source).statements;
+    const [again] = parse(print(statement!)).statements;
+    const strip = (value: unknown) => JSON.stringify(value, (key, inner) => (key === "at" || key === "end" ? undefined : inner));
+    assert.equal(strip(again), strip(statement), source);
+  }
+  assert.equal(print(parse("text a right a").statements[0]!), "text a right of a");
 });

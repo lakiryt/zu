@@ -8,11 +8,15 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.ts",
-    "typecheck": "tsc -p tsconfig.json",
-    "render": "node cli.ts"
+    "typecheck": "tsc -p tsconfig.json && tsc -p editor/tsconfig.json",
+    "render": "node cli.ts",
+    "dev": "vite editor",
+    "build": "vite build editor",
+    "preview": "vite preview editor"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "8.3.4"
   }
 }

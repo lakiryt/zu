@@ -17,7 +17,8 @@ export type Geometry =
 // anchor は図形の本体(ラベルを除く)の中心。at、相対配置の揃え、align はこの点で決まる
 export type PlacedShape = { id: string; label: string; box: Box; anchor: Point; geometry: Geometry };
 
-export type Scene = { width: number; height: number; shapes: PlacedShape[] };
+// origin は書いた座標の (0, 0) が図のどこに来たか。全体を余白の内側へずらした量でもある
+export type Scene = { width: number; height: number; origin: Point; shapes: PlacedShape[] };
 
 export const DEFAULT_GAP = 40;
 export const PADDING = 20;
@@ -221,10 +222,10 @@ export function layout(document: Document): Scene {
     geometry: size.geometry,
   }));
 
-  if (shapes.length === 0) return { width: PADDING * 2, height: PADDING * 2, shapes };
+  if (shapes.length === 0) return { width: PADDING * 2, height: PADDING * 2, origin: { x: PADDING, y: PADDING }, shapes };
   const right = Math.max(...shapes.map(({ box }) => box.x + box.width));
   const bottom = Math.max(...shapes.map(({ box }) => box.y + box.height));
-  return { width: right + PADDING, height: bottom + PADDING, shapes };
+  return { width: right + PADDING, height: bottom + PADDING, origin: { x: shiftX, y: shiftY }, shapes };
 }
 
 // 同じ向きの揃えで図形を共有するものは一つにまとめる。並びは最初に挙げた順

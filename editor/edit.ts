@@ -1,0 +1,161 @@
+// .zu の文字を、文の単位で書き換える。DOM を知らないので Node でも試せる
+import { print } from "../src/syntax/print.ts";
+import type { Document, ShapeStatement, SourcePosition, Statement } from "../src/syntax/ast.ts";
+
+// 行と列(1から、字は code point で数える)を文字列の添字にする
+export function offsetOf(text: string, { line, column }: SourcePosition) {
+  const lines = text.split("\n");
+  let offset = 0;
+  for (let index = 0; index < line - 1 && index < lines.length; index++) offset += lines[index]!.length + 1;
+  const current = lines[line - 1] ?? "";
+  return offset + [...current].slice(0, column - 1).join("").length;
+}
+
+// 文ごとに書き換える。fn が undefined を返せばそのまま、null なら行ごと消す、文を返せば置き換える。
+// 後ろの文から書き換えるので、前の文の位置はずれない
+export function rewrite(text: string, document: Document, fn: (statement: Statement) => Statement | null | undefined) {
+  let result = text;
+  for (const statement of [...document.statements].reverse()) {
+    const next = fn(statement);
+    if (next === undefined) continue;
+    if (next === null) {
+      const start = offsetOf(result, { line: statement.at.line, column: 1 });
+      const lineEnd = result.indexOf("\n", start);
+      result = result.slice(0, start) + (lineEnd === -1 ? "" : result.slice(lineEnd + 1));
+    } else {
+      const start = offsetOf(result, statement.at);
+      const end = offsetOf(result, statement.end);
+      result = result.slice(0, start) + print(next) + result.slice(end);
+    }
+  }
+  return result;
+}
+
+export function replaceShape(text: string, document: Document, next: ShapeStatement) {
+  return rewrite(text, document, (statement) =>
+    statement.kind === "shape" && statement.id === next.id ? next : undefined,
+  );
+}
+
+export function append(text: string, statement: Statement) {
+  const base = text === "" || text.endsWith("\n") ? text : `${text}\n`;
+  return `${base}${print(statement)}\n`;
+}
+
+export function shapes(document: Document) {
+  return document.statements.filter((statement) => statement.kind === "shape");
+}
+
+export function findShape(document: Document, id: string) {
+  return shapes(document).find((statement) => statement.id === id);
+}
+
+export function freshId(document: Document, base = "図形") {
+  const used = new Set(shapes(document).map(({ id }) => id));
+  for (let n = 1; ; n++) if (!used.has(`${base}${n}`)) return `${base}${n}`;
+}
+
+// 数を書いている図形か(エディタで印を付ける)
+export function usesNumbers(statement: ShapeStatement) {
+  const { placement, size } = statement;
+  return placement?.kind === "at" || (placement?.kind === "beside" && placement.gap !== null) || size !== null;
+}
+
+// id の図形の位置が変わるとついてくる図形(置き方をたどって id に行き着くもの)。
+// 置き方のない図形は直前の図形に従う
+export function dependents(document: Document, id: string) {
+  const list = shapes(document);
+  const baseOf = new Map<string, string | null>(
+    list.map((statement, index) => {
+      const { placement } = statement;
+      if (placement?.kind === "at") return [statement.id, null];
+      if (placement) return [statement.id, placement.of];
+      return [statement.id, list[index - 1]?.id ?? null];
+    }),
+  );
+  const result = new Set<string>();
+  for (const { id: start } of list) {
+    const seen = new Set<string>();
+    let current = baseOf.get(start) ?? null;
+    while (current !== null && !seen.has(current)) {
+      if (current === id) {
+        result.add(start);
+        break;
+      }
+      seen.add(current);
+      current = baseOf.get(current) ?? null;
+    }
+  }
+  result.delete(id);
+  return result;
+}
+
+// 名前を変え、参照している置き方と揃えも書き換える
+export function rename(text: string, document: Document, from: string, to: string) {
+  return rewrite(text, document, (statement) => {
+    if (statement.kind === "align") {
+      if (!statement.members.some(({ id }) => id === from)) return undefined;
+      return { ...statement, members: statement.members.map((m) => (m.id === from ? { ...m, id: to } : m)) };
+    }
+    const own = statement.id === from;
+    const refers = statement.placement?.kind === "beside" && statement.placement.of === from;
+    if (!own && !refers) return undefined;
+    return {
+      ...statement,
+      id: own ? to : statement.id,
+      placement:
+        refers && statement.placement?.kind === "beside" ? { ...statement.placement, of: to } : statement.placement,
+    };
+  });
+}
+
+// 消す。揃えからは外し(残りが1つになった揃えは消す)、この図形を基準にしていた図形は、
+// 消す図形の置き方を引き継ぐ。ただし基準が自分自身になる場合は置き方を外す
+export function remove(text: string, document: Document, id: string) {
+  const target = findShape(document, id);
+  if (!target) return text;
+  return rewrite(text, document, (statement) => {
+    if (statement.kind === "align") {
+      if (!statement.members.some((m) => m.id === id)) return undefined;
+      const members = statement.members.filter((m) => m.id !== id);
+      return members.length < 2 ? null : { ...statement, members };
+    }
+    if (statement.id === id) return null;
+    if (statement.placement?.kind !== "beside" || statement.placement.of !== id) return undefined;
+    const inherited = target.placement;
+    const selfRef = inherited?.kind === "beside" && inherited.of === statement.id;
+    return { ...statement, placement: selfRef ? null : inherited };
+  });
+}
+
+// 揃えを足す。同じ向きの揃えに既に入っている図形があれば、その揃えに加える
+export function addAlign(text: string, document: Document, axis: "row" | "column", ids: string[]) {
+  const existing = document.statements.find(
+    (statement) => statement.kind === "align" && statement.axis === axis && statement.members.some((m) => ids.includes(m.id)),
+  );
+  if (existing && existing.kind === "align") {
+    const have = new Set(existing.members.map((m) => m.id));
+    const added = ids.filter((id) => !have.has(id)).map((id) => ({ id, at: existing.at }));
+    if (added.length === 0) return text;
+    return rewrite(text, document, (statement) =>
+      statement === existing ? { ...existing, members: [...existing.members, ...added] } : undefined,
+    );
+  }
+  const at = { line: 0, column: 0 };
+  return append(text, { kind: "align", axis, members: ids.map((id) => ({ id, at })), at, end: at });
+}
+
+// 揃えから外す。残りが1つになった揃えは消す
+export function leaveAlign(text: string, document: Document, axis: "row" | "column", id: string) {
+  return rewrite(text, document, (statement) => {
+    if (statement.kind !== "align" || statement.axis !== axis) return undefined;
+    if (!statement.members.some((m) => m.id === id)) return undefined;
+    const members = statement.members.filter((m) => m.id !== id);
+    return members.length < 2 ? null : { ...statement, members };
+  });
+}
+
+// 文字の位置(行)にある図形の名前
+export function shapeAtLine(document: Document, line: number) {
+  return shapes(document).find((statement) => statement.at.line === line)?.id ?? null;
+}

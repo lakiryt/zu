@@ -47,7 +47,7 @@ block-beta:
 検討中の資料:
 
 - [design/placement.md](design/placement.md): 数値に頼らない置き方(揃え、並び、間の段階)
-- [design/editor.md](design/editor.md): 視覚的なエディタ(ドラッグはスナップさせ、数の指定は高度な設定にする)
+- [design/editor.md](design/editor.md): 視覚的なエディタ(`editor/`)。できること、暫定の判断、未決
 - [research/mermaid-layout.md](research/mermaid-layout.md): Mermaid の配置と大きさの扱いの調べ
 
 - 線と矢印(v0 では扱っていない)。Mermaid の検討から、少なくとも次は欲しい
@@ -59,7 +59,7 @@ block-beta:
 - 文字幅は全角1字、それ以外0.6字で見積もっている。書体によっては長い文字列がずれる
 - 名前の `zu` と拡張子 `.zu` は仮
 - 論証ドリルに組み込むか(論証や知識に図を添える、など)。組み込むなら、論証ドリルのデータは利用者ごとに閉じている点(第三者の著作物を含み得るため共有しない)に合わせる
-- 視覚的なエディタ(design/editor.md)。今は SVG を出してブラウザや VS Code で開く
+- 視覚的なエディタの詰め(design/editor.md の「暫定の判断」と「未決」)
 
 ## 確認の仕方
 

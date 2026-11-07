@@ -3,7 +3,8 @@ import type { SourcePosition } from "./ast.ts";
 
 export type TokenType = "word" | "string" | "number" | "comma" | "newline" | "eof";
 
-export type Token = { type: TokenType; value: string; at: SourcePosition };
+// end は字句の直後の位置。エディタが文の範囲を書き換えるのに使う
+export type Token = { type: TokenType; value: string; at: SourcePosition; end: SourcePosition };
 
 const WORD_START = /[\p{L}_]/u;
 const WORD_PART = /[\p{L}\p{N}_-]/u;
@@ -44,12 +45,12 @@ export function tokenize(source: string): Token[] {
       advance();
     } else if (char === "\n") {
       advance();
-      tokens.push({ type: "newline", value: "\n", at });
+      tokens.push({ type: "newline", value: "\n", at, end: here() });
     } else if (char === "%" && peek(1) === "%") {
       while (peek() !== undefined && peek() !== "\n") advance();
     } else if (char === ",") {
       advance();
-      tokens.push({ type: "comma", value: ",", at });
+      tokens.push({ type: "comma", value: ",", at, end: here() });
     } else if (char === '"') {
       advance();
       let value = "";
@@ -70,19 +71,20 @@ export function tokenize(source: string): Token[] {
           value += next;
         }
       }
-      tokens.push({ type: "string", value, at });
+      tokens.push({ type: "string", value, at, end: here() });
     } else if (DIGIT.test(char) || (char === "-" && DIGIT.test(peek(1) ?? ""))) {
       let value = char === "-" ? advance() : "";
       value += take(DIGIT);
       if (peek() === "." && DIGIT.test(peek(1) ?? "")) value += advance() + take(DIGIT);
-      tokens.push({ type: "number", value, at });
+      tokens.push({ type: "number", value, at, end: here() });
     } else if (WORD_START.test(char)) {
-      tokens.push({ type: "word", value: take(WORD_PART), at });
+      const value = take(WORD_PART);
+      tokens.push({ type: "word", value, at, end: here() });
     } else {
       throw new ZuError(`「${char}」は使えません`, at);
     }
   }
 
-  tokens.push({ type: "eof", value: "", at: here() });
+  tokens.push({ type: "eof", value: "", at: here(), end: here() });
   return tokens;
 }

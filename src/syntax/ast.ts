@@ -22,6 +22,8 @@ export type ShapeStatement = {
   placement: Placement | null;
   size: { width: number; height: number | null } | null;
   at: SourcePosition;
+  // 文の最後の字句の直後(行末のコメントは含まない)
+  end: SourcePosition;
 };
 
 export const AXES = ["row", "column"] as const;
@@ -33,6 +35,7 @@ export type AlignStatement = {
   axis: Axis;
   members: { id: string; at: SourcePosition }[];
   at: SourcePosition;
+  end: SourcePosition;
 };
 
 export type Statement = ShapeStatement | AlignStatement;

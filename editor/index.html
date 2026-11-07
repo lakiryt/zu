@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>zu エディタ</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>zu</h1>
+      <div id="toolbar"></div>
+      <input id="file" type="file" accept=".zu,text/plain" hidden />
+    </header>
+    <main>
+      <section class="source">
+        <textarea id="source" spellcheck="false" aria-label="zu の文字"></textarea>
+        <div id="error" role="alert"></div>
+      </section>
+      <section class="canvas">
+        <div id="stage"></div>
+        <div id="status" role="status"></div>
+      </section>
+      <aside id="panel"></aside>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

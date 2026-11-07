@@ -4,9 +4,10 @@ import { parse } from "./syntax/parser.ts";
 
 export { ZuError } from "./errors.ts";
 export { layout } from "./layout/layout.ts";
-export type { PlacedShape, Scene } from "./layout/layout.ts";
+export type { PlacedShape, Point, Scene } from "./layout/layout.ts";
+export { print } from "./syntax/print.ts";
 export { toSvg } from "./svg/svg.ts";
-export type { Document } from "./syntax/ast.ts";
+export type { Document, Placement, ShapeStatement, Statement } from "./syntax/ast.ts";
 export { tokenize } from "./syntax/lexer.ts";
 export { parse } from "./syntax/parser.ts";
 

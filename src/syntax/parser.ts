@@ -75,7 +75,7 @@ export function parse(source: string): Document {
       members.push({ id: token.value, at: token.at });
     }
     if (members.length < 2) throw new ZuError("揃える図形を2つ以上書きます", peek().at);
-    return { kind: "align", axis: axis.value, members, at: head.at };
+    return { kind: "align", axis: axis.value, members, at: head.at, end: tokens[index - 1]!.end };
   }
 
   function shape(head: Token, shapeName: Shape): ShapeStatement {
@@ -118,7 +118,7 @@ export function parse(source: string): Document {
       }
     }
 
-    return { kind: "shape", shape: shapeName, id, label, placement, size, at: head.at };
+    return { kind: "shape", shape: shapeName, id, label, placement, size, at: head.at, end: tokens[index - 1]!.end };
   }
 
   const statements: Statement[] = [];
