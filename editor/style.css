@@ -238,6 +238,36 @@ button.link:hover {
   color: var(--accent);
 }
 
+/* 霊智堂のほかのアプリ。窓の本文とは地の色を変えて分ける */
+#about .siblings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+#about .siblings p {
+  margin: 0;
+  flex: 1 1 280px;
+}
+
+#about .siblings a {
+  font-weight: 700;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+#about .siblings a:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 560px) {
   #about .example,
   #about .cheats {

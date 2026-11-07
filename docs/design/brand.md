@@ -65,6 +65,10 @@ P="$(cygpath -w "$PWD")\\editor\\public"
 - URL が分からないとき(手元の `npm run dev` など)は、URL の要る行を消す
 - `robots.txt` はいつも書き出し、`sitemap.xml` は URL が分かるときだけ書き出す
 
+## 霊智堂のほかのアプリ
+
+Law図 は霊智堂の Web アプリの一つとして https://apps.reichido.com/ に載っている。「Law図 について」の窓のいちばん下に、地の色を変えた帯で、そこへのリンクを置いた。構造化データの `creator` にも霊智堂を書いた。
+
 ## 未決
 
 - ファビコンを小さい大きさ向けに描き分けるか(今は 16px でも同じ図)
