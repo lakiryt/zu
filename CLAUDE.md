@@ -7,11 +7,12 @@
 構文(`src/syntax/`)→ 配置(`src/layout/`)→ 描画(`src/svg/`)の3段。各段は前の段の結果だけを受け取り、後ろの段を知らない。
 
 - `src/syntax/`: 字句解析と構文解析。座標や大きさの計算をしない
-- `src/layout/`: 構文木から図形の外枠(座標と大きさ)と、描くのに要る寸法を決める。SVG を知らない
+- `src/layout/`: 構文木から図形の外枠(座標と大きさ)と、描くのに要る寸法を決める。SVG を知らない。`layout.ts` が入口で、大きさ(`size.ts`)、位置(`position.ts`)、線とラベル(`lines.ts`)に分かれる
 - `src/svg/`: 配置済みの図形を SVG の文字列にする。大きさや位置を計算し直さない
 - `src/errors.ts`: どの段の誤りも `ZuError`(行と列)で報告する
+- `src/index.ts`: 公開する入口。ほかのプロジェクトは GitHub から入れ、ここ(ビルド後は `dist/index.js`)から読み込む。公開するものを変えたら README も直す
 - `cli.ts`: ファイルを読んで SVG を書く入口
-- `editor/`: ブラウザのエディタ(Vite で束ねる)。3段を使う側で、`src/` から editor を参照しない。文字の書き換え(`edit.ts`)と吸着の計算(`snap.ts`)は DOM を使わず、`tests/editor.test.ts` で試す
+- `editor/`: ブラウザのエディタ(Vite で束ねる)。3段を使う側で、`src/index.ts` の公開するものだけを使う。`src/` から editor を参照しない。状態は `state.ts` の `Editor` に集め、各欄(`canvas.ts`、`panel.ts`、`toolbar.ts`)は変化を受けて描き直す。DOM を使わない部分(`edit.ts`、`relocate.ts`、`snap.ts`、`history.ts`、`state.ts`)は `tests/editor.test.ts` で試す
 
 ## コマンド
 
@@ -19,6 +20,7 @@
 npm install          # 型チェック用の TypeScript を入れる
 npm test             # tests/*.test.ts
 npm run typecheck
+npm run build:lib    # dist/ にライブラリ(JS と型定義)を書き出す。npm install でも走る(prepare)
 node cli.ts examples/agency.zu examples/agency.svg
 npm run dev          # エディタ(Vite)
 npm run build        # editor/dist に書き出す(Vercel はこれを出す)
@@ -26,7 +28,7 @@ npm run build        # editor/dist に書き出す(Vercel はこれを出す)
 
 ## ルール
 
-- 実行時の依存パッケージを足さない(エディタも含む。Vite は開発用)。Node 24 で .ts をそのまま動かす(`erasableSyntaxOnly` に収まる書き方にする)
+- 実行時の依存パッケージを足さない(エディタも含む。Vite は開発用)。Node 24 で .ts をそのまま動かす(`erasableSyntaxOnly` に収まる書き方にする)。`src/` の import は `.ts` を付けて書く(ライブラリのビルドで `.js` に書き換わる)
 - 言語の語(図形の名前、キーワード)は特定の分野に寄せない。法律の図にも使うが、`text`、`cube` のように見た目で名付ける
 - 文法や意味を変えたら SPEC.md も直す。例(`examples/`)の SVG も出し直す
 - 誤りの文言、コメント、文書は日本語

@@ -1,14 +1,29 @@
 {
   "name": "zu",
   "private": true,
+  "version": "0.1.0",
   "type": "module",
   "description": "図形を文字で書いて SVG にする記述言語の試作",
   "engines": {
     "node": ">=24"
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "test": "node --test tests/*.test.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p editor/tsconfig.json",
+    "build:lib": "tsc -p tsconfig.lib.json",
+    "prepare": "npm run build:lib",
     "render": "node cli.ts",
     "dev": "vite editor",
     "build": "vite build editor",
