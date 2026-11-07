@@ -42,7 +42,7 @@ export type AlignStatement = {
 export const LINE_STYLES = ["solid", "dotted", "double"] as const;
 export type LineStyle = (typeof LINE_STYLES)[number];
 
-// 線の端。open は塗りつぶさない三角(>)、filled は塗りつぶした三角(>>)、dot は塗りつぶした丸(o)
+// 線の端。open は V 字の矢印(>)、filled は塗りつぶした三角の矢印(>>)、dot は塗りつぶした丸(o)
 export const HEADS = ["none", "open", "filled", "dot"] as const;
 export type Head = (typeof HEADS)[number];
 

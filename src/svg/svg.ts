@@ -103,8 +103,9 @@ const HEAD = { length: 12, width: 10, radius: 4, doubleScale: 1.35 };
 
 type Vector = { x: number; y: number };
 
-// tip に向かう向き u の矢先。線をどれだけ手前で止めるか(back)も返す
-function head(kind: Head, tip: Vector, u: Vector, scale: number) {
+// tip に向かう向き u の矢先。線をどれだけ手前で止めるか(back)も返す。
+// spread は線の中心から外側の線までの距離(二重線なら半分の間、それ以外は 0)
+function head(kind: Head, tip: Vector, u: Vector, scale: number, spread: number) {
   if (kind === "none") return { svg: "", back: 0 };
   if (kind === "dot") {
     const r = HEAD.radius * scale;
@@ -120,7 +121,15 @@ function head(kind: Head, tip: Vector, u: Vector, scale: number) {
     [base.x + n.x * half, base.y + n.y * half],
     [base.x - n.x * half, base.y - n.y * half],
   ];
-  const fill = kind === "filled" ? STROKE : FACES.front;
+  if (kind === "open") {
+    // V 字。中が空いているので線は先端まで伸ばす。二重線は、2本が V の腕に当たる所で止める
+    const arms: [number, number][] = [corners[1]!, corners[0]!, corners[2]!];
+    return {
+      svg: `<polyline points="${points(arms)}" fill="none" stroke="${STROKE}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+      back: (spread * length) / half,
+    };
+  }
+  const fill = STROKE;
   return {
     svg: `<polygon points="${points(corners)}" fill="${fill}" stroke="${STROKE}" stroke-width="1.5" stroke-linejoin="round"/>`,
     back: length,
@@ -133,8 +142,9 @@ function drawLine({ start, end, arrow, label: text, labelBox }: PlacedLine) {
   if (length > 0) {
     const u = { x: (end.x - start.x) / length, y: (end.y - start.y) / length };
     const scale = arrow.style === "double" ? HEAD.doubleScale : 1;
-    const atEnd = head(arrow.end, end, u, scale);
-    const atStart = head(arrow.start, start, { x: -u.x, y: -u.y }, scale);
+    const spread = arrow.style === "double" ? DOUBLE_GAP / 2 : 0;
+    const atEnd = head(arrow.end, end, u, scale, spread);
+    const atStart = head(arrow.start, start, { x: -u.x, y: -u.y }, scale, spread);
     // 矢先の中に線が見えないよう、線は矢先の根元で止める
     const from = { x: start.x + u.x * atStart.back, y: start.y + u.y * atStart.back };
     const to = { x: end.x - u.x * atEnd.back, y: end.y - u.y * atEnd.back };

@@ -172,7 +172,9 @@ test("the svg draws line styles and heads", () => {
   assert.equal(line(1).match(/<line /g)?.length, 2);
   assert.equal(line(0).match(/<line /g)?.length, 1);
   assert.match(line(1), /<circle/);
-  assert.match(line(2), /<polygon[^>]*fill="#ffffff"/);
+  // > は V 字(塗らない折れ線)
+  assert.match(line(2), /<polyline[^>]*fill="none"/);
+  assert.doesNotMatch(line(2), /<polygon/);
   // 線は図形より先に(下に)描く
   assert.ok(svg.indexOf('data-line="0"') < svg.indexOf('data-id="a"'));
 });
