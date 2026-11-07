@@ -35,13 +35,20 @@ block-beta:
 ## v0 でできること
 
 - 図形: `text`(枠なしの文字)、`parallelogram`(平行四辺形)、`cube`(立方体、ラベルは下)
-- 置き方: `at x y`(中心の座標)、`right of a by 40` などの相対配置(`of` は省略可、間は外枠どうしの距離で既定 40)、何も書かなければ直前の図形の右
+- 置き方: `right of a by 40` などの相対配置(`of` は省略可、間は外枠どうしの距離で既定 40)、何も書かなければ直前の図形の右、`at x y`(座標)。位置は図形の本体(cube ならラベルを除いた立方体)の中心で決める
+- 揃え: `align row b land`(同じ段)、`align column a b`(同じ列)。数を書かずに揃えられる(2026-11-07 追加)
 - 後に書いた図形も参照でき、存在しない参照、循環、名前の重複は誤りになる
 - `size`、複数行のラベル(`\n`)、コメント
 
 詳しくは SPEC.md。
 
 ## 決めていないこと、次にやりたいこと
+
+検討中の資料:
+
+- [design/placement.md](design/placement.md): 数値に頼らない置き方(揃え、並び、間の段階)
+- [design/editor.md](design/editor.md): 視覚的なエディタ(ドラッグはスナップさせ、数の指定は高度な設定にする)
+- [research/mermaid-layout.md](research/mermaid-layout.md): Mermaid の配置と大きさの扱いの調べ
 
 - 線と矢印(v0 では扱っていない)。Mermaid の検討から、少なくとも次は欲しい
   - 矢じりなし、片側、両側を描き分ける
@@ -52,8 +59,12 @@ block-beta:
 - 文字幅は全角1字、それ以外0.6字で見積もっている。書体によっては長い文字列がずれる
 - 名前の `zu` と拡張子 `.zu` は仮
 - 論証ドリルに組み込むか(論証や知識に図を添える、など)。組み込むなら、論証ドリルのデータは利用者ごとに閉じている点(第三者の著作物を含み得るため共有しない)に合わせる
-- エディタでのプレビュー(今は SVG を出してブラウザや VS Code で開く)
+- 視覚的なエディタ(design/editor.md)。今は SVG を出してブラウザや VS Code で開く
 
 ## 確認の仕方
 
-`node cli.ts examples/agency.zu examples/agency.svg` で SVG を出し、ブラウザで開く。作業中は Playwright で SVG を画像にして見た目を確かめていた(このリポジトリには Playwright を入れていない)。
+`node cli.ts examples/agency.zu examples/agency.svg` で SVG を出し、ブラウザで開く。作業中は Playwright で SVG を画像にして見た目を確かめていた(このリポジトリには Playwright を入れていない)。Windows では、入っている Chrome をヘッドレスで使っても画像にできる:
+
+```
+"/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --hide-scrollbars --window-size=720,300 --screenshot=out.png "file:///<リポジトリの場所>/examples/agency.svg"
+```
