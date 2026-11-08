@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { ZuError, layout, parse, render } from "../src/index.ts";
 import { DEFAULT_GAP, PADDING } from "../src/layout/layout.ts";
 import type { PlacedShape } from "../src/layout/layout.ts";
-import { pointAt } from "../src/layout/geometry.ts";
+import { pointAt, tangentAt } from "../src/layout/geometry.ts";
 import type { PlacedLine } from "../src/layout/layout.ts";
 import { controlFor } from "../src/layout/lines.ts";
 import { measureText } from "../src/layout/measure.ts";
@@ -409,6 +409,9 @@ test("ends arriving at one shape from close directions are kept apart, so the ar
   const [up, across, arc] = order.lines;
   assert.ok(arc!.to.point.y > across!.to.point.y, "弧は横の線の下に着く");
   assert.ok(arc!.from.point.x > up!.from.point.x, "弧は縦の線の右から出る");
+  // 横の線の下に着く弧の矢先は、横の線と平行でなく、上向きに図形のほうへ寄る
+  const arriving = tangentAt({ start: arc!.from.point, controls: arc!.controls, end: arc!.to.point }, 1);
+  assert.ok(arriving.x > 0 && arriving.y < -0.1, `矢先の向き ${JSON.stringify(arriving)}`);
   // 小さな図形に多く来ても、枠を広げて離す
   const crowd = layout(
     parse("text q\ntext a at -200 -60\ntext b at -200 -20\ntext c at -200 20\ntext d at -200 60\ntext e at -200 0\na ---> q\nb ---> q\nc ---> q\nd ---> q\ne ---> q"),
