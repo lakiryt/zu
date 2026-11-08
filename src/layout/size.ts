@@ -7,7 +7,7 @@ import { measureText } from "./measure.ts";
 export type Geometry =
   | { shape: "text" }
   | { shape: "parallelogram"; skew: number }
-  // 立方体は外枠の上部に描き、ラベルはその下に置く。labelTop は外枠の上端からラベルの上端まで
+  // 立方体は外枠の上部に描き、ラベルがあればその下に置く。labelTop は外枠の上端からラベルの上端まで
   | { shape: "cube"; edge: number; depth: number; labelTop: number };
 
 // 大きさの語ごとの寸法。書かなければ medium。平行四辺形は高さと最小の幅、立方体は正面の一辺
@@ -23,8 +23,15 @@ const CUBE = { depthRatio: 0.3, labelGap: 6 };
 // 外枠の大きさ。anchorTop は外枠の上端から本体(ラベルを除いた図形)の中心まで
 export type Sized = { width: number; height: number; anchorTop: number; geometry: Geometry };
 
+// 図形に書くラベル。text は字そのものが図形なので、省けば名前を書く。ほかの図形は、省くか空ならラベルなし
+export function labelOf(statement: ShapeStatement): string | null {
+  if (statement.shape === "text") return statement.label ?? statement.id;
+  return statement.label === "" ? null : statement.label;
+}
+
 export function sizeOf(statement: ShapeStatement): Sized {
-  const text = measureText(statement.label ?? statement.id);
+  const label = labelOf(statement);
+  const text = label === null ? { width: 0, height: 0 } : measureText(label);
   const { size } = statement;
   const scale = size?.kind === "scale" ? size.scale : "medium";
   const numbers = size?.kind === "numbers" ? size : null;
@@ -46,7 +53,7 @@ export function sizeOf(statement: ShapeStatement): Sized {
       const depth = edge * CUBE.depthRatio;
       return {
         width: Math.max(edge + depth, text.width),
-        height: edge + depth + CUBE.labelGap + text.height,
+        height: edge + depth + (label === null ? 0 : CUBE.labelGap + text.height),
         anchorTop: (edge + depth) / 2,
         geometry: { shape: "cube", edge, depth, labelTop: edge + depth + CUBE.labelGap },
       };

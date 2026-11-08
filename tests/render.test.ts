@@ -300,3 +300,17 @@ test("a caption wider than the drawing widens it", () => {
   const alone = layout(parse('caption "文だけ"'));
   close(alone.captions[0]!.box.x, PADDING);
 });
+
+test("a cube or parallelogram without a label draws none, and a cube shrinks to its body", () => {
+  const { a, b, c } = place("cube a\ncube b below a\nparallelogram c");
+  close(a!.height, 40 * 1.3);
+  // 下の図形は、ラベルのない立方体の本体から既定の間で置く
+  close(b!.y - (a!.y + a!.height), DEFAULT_GAP);
+  close(c!.height, 48);
+  const svg = render('cube a\nparallelogram b ""\ntext t');
+  const group = (id: string) => svg.match(new RegExp(`<g data-id="${id}">(.*?)</g>`))?.[1] ?? "";
+  assert.doesNotMatch(group("a"), /<text/);
+  assert.doesNotMatch(group("b"), /<text/);
+  // text はラベルを省くと名前を書く
+  assert.match(group("t"), />t<\/tspan>/);
+});

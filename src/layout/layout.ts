@@ -8,7 +8,7 @@ import type { Box, Point } from "./geometry.ts";
 import { placeLines } from "./lines.ts";
 import type { PlacedLine } from "./lines.ts";
 import { solvePositions } from "./position.ts";
-import { frameAt, sizeOf } from "./size.ts";
+import { frameAt, labelOf, sizeOf } from "./size.ts";
 import type { Geometry } from "./size.ts";
 
 export type { PlacedCaption } from "./captions.ts";
@@ -18,7 +18,8 @@ export { DEFAULT_GAP, defaultGap } from "./position.ts";
 export type { Geometry } from "./size.ts";
 
 // anchor は図形の本体(ラベルを除く)の中心。at、相対配置の揃え、align はこの点で決まる
-export type PlacedShape = { id: string; label: string; box: Box; anchor: Point; geometry: Geometry };
+// label は図形に書くラベル(なければ null)
+export type PlacedShape = { id: string; label: string | null; box: Box; anchor: Point; geometry: Geometry };
 
 // origin は書いた座標の (0, 0) が図のどこに来たか。全体を余白の内側へずらした量でもある
 export type Scene = {
@@ -70,7 +71,7 @@ export function layout(document: Document): Scene {
     origin,
     shapes: placed.map(({ statement, geometry, anchor, box }) => ({
       id: statement.id,
-      label: statement.label ?? statement.id,
+      label: labelOf(statement),
       box: shift(box),
       anchor: shift(anchor),
       geometry,

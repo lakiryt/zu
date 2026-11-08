@@ -40,6 +40,15 @@ function sizeFor(shape: Shape, size: Size | null): Size | null {
   return size;
 }
 
+// 図形のラベルの欄。text はラベルを省くと名前を書くので、名前と同じなら省く。
+// ほかの図形は、空にするとラベルなし
+function labelField(statement: ShapeStatement, onChange: (label: string | null) => void) {
+  if (statement.shape === "text") {
+    return textArea(statement.label ?? statement.id, 2, (label) => onChange(label === statement.id ? null : label));
+  }
+  return textArea(statement.label ?? "", 2, (label) => onChange(label === "" ? null : label), "なし");
+}
+
 const textArea = (value: string, rows: number, onChange: (value: string) => void, placeholder = "") => {
   const node = html("textarea", { rows: String(rows), placeholder }) as HTMLTextAreaElement;
   node.value = value;
@@ -181,7 +190,7 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
         "label",
         { class: "field" },
         "ラベル",
-        textArea(statement.label ?? statement.id, 2, (label) => change({ label: label === statement.id ? null : label })),
+        labelField(statement, (label) => change({ label })),
       ),
       choice("形", SHAPES, SHAPE_NAMES, statement.shape, (shape) => change({ shape, size: sizeFor(shape, statement.size) })),
     );

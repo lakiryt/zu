@@ -40,13 +40,14 @@ function text(content: string, x: number, y: number, justify: Justify = "center"
   return `<text text-anchor="${TEXT_ANCHOR[justify]}" dominant-baseline="central"${size}>${spans}</text>`;
 }
 
-function drawShape({ label, box, geometry }: PlacedShape) {
+function drawShape({ label: content, box, geometry }: PlacedShape) {
   const { x, y, width, height } = box;
   const centerX = x + width / 2;
+  const label = (cy: number) => (content === null ? "" : text(content, centerX, cy));
 
   switch (geometry.shape) {
     case "text":
-      return text(label, centerX, y + height / 2);
+      return label(y + height / 2);
 
     case "parallelogram": {
       const { skew } = geometry;
@@ -56,7 +57,7 @@ function drawShape({ label, box, geometry }: PlacedShape) {
         { x: x + width - skew, y: y + height },
         { x, y: y + height },
       ];
-      return polygon(outline, FACES.front) + text(label, centerX, y + height / 2);
+      return polygon(outline, FACES.front) + label(y + height / 2);
     }
 
     case "cube": {
@@ -86,7 +87,7 @@ function drawShape({ label, box, geometry }: PlacedShape) {
         polygon(top, FACES.top),
         polygon(side, FACES.side),
         polygon(face, FACES.front),
-        text(label, centerX, (y + labelTop + y + height) / 2),
+        label((y + labelTop + y + height) / 2),
       ].join("");
     }
   }
