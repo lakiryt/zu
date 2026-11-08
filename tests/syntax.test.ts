@@ -186,3 +186,24 @@ test("printing a line gives back the same line", () => {
     assert.equal(print(statement!), source);
   }
 });
+
+test("a caption holds its text, alignment and size, and prints back", () => {
+  const [caption] = parse('caption "一行目\\n二行目" right size small').statements;
+  assert.deepEqual(caption, {
+    kind: "caption",
+    text: "一行目\n二行目",
+    align: "right",
+    size: "small",
+    at: { line: 1, column: 1 },
+    end: { line: 1, column: 36 },
+  });
+  for (const source of ['caption "x"', 'caption "x" center', 'caption "x" size large']) {
+    assert.equal(print(parse(source).statements[0]!), source);
+  }
+  // caption という名前の図形も結べる
+  assert.equal(parse("caption --- a").statements[0]?.kind, "line");
+  assertError("caption", 1, 8, /文\("…"\)が必要です/);
+  assertError('caption "x" top', 1, 13, /「top」は使えません/);
+  assertError('caption "x" left right', 1, 18, /揃えは1つの文に1つまでです/);
+  assertError('caption "x" size 12', 1, 18, /大きさ\(small、medium、large\)が必要です/);
+});

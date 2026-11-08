@@ -249,3 +249,14 @@ test("the editor keeps the text as the source and refuses edits that break it", 
   editor.undo();
   assert.equal(editor.text, "text a\ntext b below a\n");
 });
+
+test("captions are added, changed and removed by their order", () => {
+  const text = edit.addCaption("text a\n", "説明");
+  assert.match(text, /^caption "説明"$/m);
+  const document = parse(text);
+  const changed = edit.replaceCaption(text, document, 0, { ...edit.captions(document)[0]!, align: "center", size: "small" });
+  assert.match(changed, /^caption "説明" center size small$/m);
+  assert.doesNotMatch(edit.replaceCaption(text, document, 0, null), /caption/);
+  // 名前の書き換えは文に触れない
+  assert.match(edit.rename(text, document, "a", "b"), /^caption "説明"$/m);
+});

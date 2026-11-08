@@ -27,6 +27,12 @@ export function print(statement: Statement) {
     const deep = into.length === 0 ? "" : ` into ${into.join(" ")}`;
     return `${statement.from.id} ${writeArrow(statement.arrow)} ${statement.to.id}${label}${deep}`;
   }
+  if (statement.kind === "caption") {
+    const parts = ["caption", quote(statement.text)];
+    if (statement.align) parts.push(statement.align);
+    if (statement.size) parts.push(`size ${statement.size}`);
+    return parts.join(" ");
+  }
   if (statement.kind === "align") {
     return ["align", statement.axis, ...statement.members.map(({ id }) => id)].join(" ");
   }

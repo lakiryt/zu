@@ -11,10 +11,11 @@ export function labelLines(label: string) {
   return label.split("\n");
 }
 
-export function measureText(label: string) {
+// fontSize は字の大きさ。書かなければ図の中の字の大きさ
+export function measureText(label: string, fontSize = FONT_SIZE) {
   const lines = labelLines(label);
   const widths = lines.map(
-    (line) => [...line].reduce((sum, char) => sum + (WIDE.test(char) ? 1 : NARROW_RATIO), 0) * FONT_SIZE,
+    (line) => [...line].reduce((sum, char) => sum + (WIDE.test(char) ? 1 : NARROW_RATIO), 0) * fontSize,
   );
-  return { width: Math.max(0, ...widths), height: lines.length * FONT_SIZE * LINE_HEIGHT };
+  return { width: Math.max(0, ...widths), height: lines.length * fontSize * LINE_HEIGHT };
 }

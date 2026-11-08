@@ -1,6 +1,8 @@
 // 配置の段の入口。構文木から図形の外枠と線を決め、全体を余白の内側へ寄せる。SVG は知らない
 import { ZuError } from "../errors.ts";
 import type { Document, ShapeStatement } from "../syntax/ast.ts";
+import { placeCaptions } from "./captions.ts";
+import type { PlacedCaption } from "./captions.ts";
 import type { Box, Point } from "./geometry.ts";
 import { placeLines } from "./lines.ts";
 import type { PlacedLine } from "./lines.ts";
@@ -8,6 +10,7 @@ import { solvePositions } from "./position.ts";
 import { bodyOf, boxAt, innerOf, sizeOf } from "./size.ts";
 import type { Geometry } from "./size.ts";
 
+export type { PlacedCaption } from "./captions.ts";
 export type { Box, Point } from "./geometry.ts";
 export type { PlacedLine } from "./lines.ts";
 export { DEFAULT_GAP, defaultGap } from "./position.ts";
@@ -17,7 +20,14 @@ export type { Geometry } from "./size.ts";
 export type PlacedShape = { id: string; label: string; box: Box; anchor: Point; geometry: Geometry };
 
 // origin は書いた座標の (0, 0) が図のどこに来たか。全体を余白の内側へずらした量でもある
-export type Scene = { width: number; height: number; origin: Point; shapes: PlacedShape[]; lines: PlacedLine[] };
+export type Scene = {
+  width: number;
+  height: number;
+  origin: Point;
+  shapes: PlacedShape[];
+  lines: PlacedLine[];
+  captions: PlacedCaption[];
+};
 
 export const PADDING = 20;
 
@@ -65,8 +75,30 @@ export function layout(document: Document): Scene {
       ...(labelBox ? [labelBox] : []),
     ]),
   ];
+  // 図の下の文は、図形と線の範囲の下に置く
+  const figure =
+    extents.length === 0
+      ? null
+      : {
+          x: Math.min(...extents.map((box) => box.x)),
+          y: Math.min(...extents.map((box) => box.y)),
+          width: Math.max(...extents.map((box) => box.x + box.width)) - Math.min(...extents.map((box) => box.x)),
+          height: Math.max(...extents.map((box) => box.y + box.height)) - Math.min(...extents.map((box) => box.y)),
+        };
+  const captions = placeCaptions(
+    document.statements.filter((statement) => statement.kind === "caption"),
+    figure,
+  );
+  extents.push(...captions.map(({ box }) => box));
   if (extents.length === 0) {
-    return { width: PADDING * 2, height: PADDING * 2, origin: { x: PADDING, y: PADDING }, shapes: [], lines: [] };
+    return {
+      width: PADDING * 2,
+      height: PADDING * 2,
+      origin: { x: PADDING, y: PADDING },
+      shapes: [],
+      lines: [],
+      captions: [],
+    };
   }
 
   // いちばん左上のものが余白のすぐ内側に来るようずらす
@@ -96,5 +128,6 @@ export function layout(document: Document): Scene {
     origin: { x: shiftX, y: shiftY },
     shapes,
     lines: shiftedLines,
+    captions: captions.map((caption) => ({ ...caption, box: shift(caption.box) })),
   };
 }

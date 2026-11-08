@@ -1,8 +1,10 @@
 import { ZuError } from "../errors.ts";
-import { AXES, DIRECTIONS, SCALES, SHAPES } from "./ast.ts";
+import { AXES, CAPTION_ALIGNS, DIRECTIONS, SCALES, SHAPES } from "./ast.ts";
 import type {
   AlignStatement,
   Axis,
+  CaptionAlign,
+  CaptionStatement,
   Direction,
   Document,
   LineStatement,
@@ -31,6 +33,7 @@ const describe = (token: Token) =>
 
 const isShape = (value: string): value is Shape => (SHAPES as readonly string[]).includes(value);
 const isScale = (value: string): value is Scale => (SCALES as readonly string[]).includes(value);
+const isCaptionAlign = (value: string): value is CaptionAlign => (CAPTION_ALIGNS as readonly string[]).includes(value);
 const isAxis = (value: string): value is Axis => (AXES as readonly string[]).includes(value);
 const isDirection = (value: string): value is Direction =>
   (DIRECTIONS as readonly string[]).includes(value);
@@ -64,6 +67,7 @@ export function parse(source: string): Document {
     // 2つ目が線の記号なら線の文(図形の種類や align という名前の図形も結べる)
     if (peek().type === "arrow") return line(head);
     if (head.value === "align") return align(head);
+    if (head.value === "caption") return caption(head);
     if (!isShape(head.value)) {
       throw new ZuError(`「${head.value}」という図形はありません(${SHAPES.join("、")})`, head.at);
     }
@@ -106,6 +110,30 @@ export function parse(source: string): Document {
       at: head.at,
       end: tokens[index - 1]!.end,
     };
+  }
+
+  // caption "文" right size small: 図全体の下に置く文。揃えと字の大きさは語で書く
+  function caption(head: Token): CaptionStatement {
+    const text = expect("string", "文(\"…\")").value;
+    let align: CaptionAlign | null = null;
+    let size: CaptionStatement["size"] = null;
+    while (!atLineEnd()) {
+      const option = expect("word", "揃え(left、center、right)か size");
+      if (isCaptionAlign(option.value)) {
+        if (align) throw new ZuError("揃えは1つの文に1つまでです", option.at);
+        align = option.value;
+      } else if (option.value === "size") {
+        if (size) throw new ZuError("size は1つの文に1つまでです", option.at);
+        const word = expect("word", `大きさ(${SCALES.join("、")})`);
+        if (!isScale(word.value)) {
+          throw new ZuError(`文の大きさは ${SCALES.join("、")} で書きます(「${word.value}」がありました)`, word.at);
+        }
+        size = word.value;
+      } else {
+        throw new ZuError(`「${option.value}」は使えません(left、center、right、size)`, option.at);
+      }
+    }
+    return { kind: "caption", text, align, size, at: head.at, end: tokens[index - 1]!.end };
   }
 
   // align row a b c: 挙げた図形を同じ段(column なら同じ列)に揃える

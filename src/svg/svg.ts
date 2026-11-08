@@ -1,4 +1,4 @@
-import type { PlacedLine, PlacedShape, Scene } from "../layout/layout.ts";
+import type { PlacedCaption, PlacedLine, PlacedShape, Scene } from "../layout/layout.ts";
 import { HEAD } from "../layout/lines.ts";
 import type { Head } from "../syntax/ast.ts";
 import { FONT_SIZE, LINE_HEIGHT, labelLines } from "../layout/measure.ts";
@@ -31,6 +31,18 @@ function label(text: string, x: number, y: number) {
     .map((line, index) => `<tspan x="${round(x)}" dy="${round(index === 0 ? first : step)}">${escape(line)}</tspan>`)
     .join("");
   return `<text x="${round(x)}" y="${round(y)}" text-anchor="middle" dominant-baseline="central">${spans}</text>`;
+}
+
+// 図の下の文。行を外枠の左、中央、右に揃えて書く
+function drawCaption({ text, align, fontSize, box }: PlacedCaption) {
+  const anchor = { left: "start", center: "middle", right: "end" }[align];
+  const x = align === "left" ? box.x : align === "right" ? box.x + box.width : box.x + box.width / 2;
+  const step = fontSize * LINE_HEIGHT;
+  const spans = labelLines(text)
+    .map((line, index) => `<tspan x="${round(x)}" y="${round(box.y + step * index + step / 2)}">${escape(line)}</tspan>`)
+    .join("");
+  const size = fontSize === FONT_SIZE ? "" : ` font-size="${fontSize}"`;
+  return `<text text-anchor="${anchor}" dominant-baseline="central"${size}>${spans}</text>`;
 }
 
 function draw({ label: text, box, geometry }: PlacedShape) {
@@ -182,6 +194,7 @@ export function toSvg(scene: Scene) {
     ...lines(false),
     ...scene.shapes.map((shape) => `<g data-id="${escape(shape.id)}">${draw(shape)}</g>`),
     ...lines(true),
+    ...scene.captions.map((caption, index) => `<g data-caption="${index}">${drawCaption(caption)}</g>`),
   ].join("\n  ");
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family='${FONT_FAMILY}' font-size="${FONT_SIZE}" fill="${STROKE}">`,

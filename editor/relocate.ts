@@ -198,6 +198,7 @@ function pinDown(
   removed: string | null = null,
 ) {
   return edit.rewrite(text, document, (statement) => {
+    if (statement.kind === "caption") return undefined;
     if (statement.kind === "align") return changes.has(statement) ? changes.get(statement) : undefined;
     if (statement.kind === "line") return statement.from.id === removed || statement.to.id === removed ? null : undefined;
     const overridden = override(statement);

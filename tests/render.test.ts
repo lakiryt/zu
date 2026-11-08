@@ -272,3 +272,29 @@ test("several lines drawn into one shape end apart from each other", () => {
   const t = scene.shapes[0]!;
   for (const tip of tips) assert.ok(tip.y > t.box.y && tip.y < t.box.y + 52);
 });
+
+test("captions sit under the whole drawing, left-aligned unless told otherwise", () => {
+  const scene = layout(
+    parse('text a\ntext b below a\ncube c right of a\ncaption "左"\ncaption "右" right\ncaption "中" center size large'),
+  );
+  const bottom = Math.max(...scene.shapes.map(({ box }) => box.y + box.height));
+  const left = Math.min(...scene.shapes.map(({ box }) => box.x));
+  const right = Math.max(...scene.shapes.map(({ box }) => box.x + box.width));
+  const [first, second, third] = scene.captions;
+  close(first!.box.y, bottom + 16);
+  close(first!.box.x, left);
+  close(second!.box.x + second!.box.width, right);
+  close(third!.box.x + third!.box.width / 2, (left + right) / 2);
+  assert.ok(second!.box.y >= first!.box.y + first!.box.height);
+  assert.equal(third!.fontSize, 20);
+  close(scene.height, third!.box.y + third!.box.height + PADDING);
+  const svg = render('text a\ncaption "x" right size small');
+  assert.match(svg, /<g data-caption="0"><text text-anchor="end"[^>]*font-size="12"/);
+});
+
+test("a caption wider than the drawing widens it", () => {
+  const scene = layout(parse('text a\ncaption "とても長い説明の文がここに入る"'));
+  close(scene.width, measureText("とても長い説明の文がここに入る").width + PADDING * 2);
+  const alone = layout(parse('caption "文だけ"'));
+  close(alone.captions[0]!.box.x, PADDING);
+});

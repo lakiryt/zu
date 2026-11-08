@@ -41,10 +41,12 @@ line       = [ statement ] [ comment ] newline
 statement  = shape id [ label ] { option }
            | "align" axis id id { id }
            | id arrow id [ label ] [ "into" id [ id ] ]
+           | "caption" string { justify | "size" scale }
 arrow      = [ "<<" | "<" | "o" ] body [ ">>" | ">" | "o" ]
 body       = "-" "-" { "-" } | "-" "." { "." } "-" | "=" "=" { "=" }
 axis       = "row" | "column"
 scale      = "small" | "medium" | "large"
+justify    = "left" | "center" | "right"
 shape      = "text" | "parallelogram" | "cube"
 label      = string
 option     = "at" number [ "," ] number
@@ -55,7 +57,7 @@ direction  = "left" | "right" | "above" | "below"
 
 - `id` は図の中で一意にする。ラベルを省くと `id` をそのままラベルにする
 - 置き方(`at` と `direction of`)は1つの文に1つまで。`size` も1つまで
-- 2つ目の字句が線の記号なら線の文として読む。図形の種類や `align` という名前の図形も結べる(`text --- align`)
+- 2つ目の字句が線の記号なら線の文として読む。図形の種類や `align`、`caption` という名前の図形も結べる(`text --- align`)
 
 ## 図形
 
@@ -153,9 +155,25 @@ direction  = "left" | "right" | "above" | "below"
 - 線は図形より先に(下に)描く。中まで伸ばす線(`into`)だけは図形の後に(上に)描く
 - 存在しない図形を結んだり、同じ図形どうしを結んだりしたら誤り
 
+## 図の下の文(`caption`)
+
+`caption "文"` で、図全体の下に文を置く。注記や説明に使う。
+
+```
+caption "A は B に代理権を与えた。\nB は C と契約した。"
+caption "※ 時価は契約時のもの" right size small
+```
+
+- 図形と線(ラベルを含む)をすべて置いた範囲の下に、字の大きさ(16)ぶん空けて置く。複数あれば書いた順に上から積む
+- 揃え: `left`(既定、左詰め)、`center`、`right`。図形と線の範囲の幅の中で揃える。文がそれより広ければ、その幅で揃える(図が広がる)
+- 大きさ: `size small`(12)、`size medium`(既定、図の中の字と同じ 16)、`size large`(20)。数では書けない
+- 揃えと `size` は1つの文に1つまで。書く順は問わない
+- 名前を持たないので、線で結んだり置き方の基準にしたりはできない。図形の配置には影響しない
+- `\n` で改行できる
+
 ## 出力
 
-すべての図形と線(ラベルを含む)が入る大きさの SVG を出す。周りに 20 の余白を取る。
+すべての図形と線(ラベルを含む)と図の下の文が入る大きさの SVG を出す。周りに 20 の余白を取る。
 
 ## 誤り
 

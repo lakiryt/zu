@@ -69,6 +69,20 @@ export type LineStatement = {
   end: SourcePosition;
 };
 
-export type Statement = ShapeStatement | AlignStatement | LineStatement;
+// 図全体の下に置く文の揃え
+export const CAPTION_ALIGNS = ["left", "center", "right"] as const;
+export type CaptionAlign = (typeof CAPTION_ALIGNS)[number];
+
+// caption "文" right size small。図全体の下に置く文。null は既定(左詰め、中の大きさ)
+export type CaptionStatement = {
+  kind: "caption";
+  text: string;
+  align: CaptionAlign | null;
+  size: Scale | null;
+  at: SourcePosition;
+  end: SourcePosition;
+};
+
+export type Statement = ShapeStatement | AlignStatement | LineStatement | CaptionStatement;
 
 export type Document = { statements: Statement[] };

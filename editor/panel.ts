@@ -1,11 +1,11 @@
 // 右の欄。選んでいる図形や線の中身を見せ、変えられるようにする
-import { HEADS, LINE_STYLES, SCALES, SHAPES } from "../src/index.ts";
-import type { Document, LineStatement, Scale, Shape, ShapeStatement } from "../src/index.ts";
+import { CAPTION_ALIGNS, HEADS, LINE_STYLES, SCALES, SHAPES } from "../src/index.ts";
+import type { CaptionStatement, Document, LineStatement, Scale, Shape, ShapeStatement } from "../src/index.ts";
 import { openAbout } from "./about.ts";
 import { align, removeSelected, setPlacement } from "./actions.ts";
 import { button, checkbox, choice, html, numberField } from "./dom.ts";
 import * as edit from "./edit.ts";
-import { DIRECTION_NAMES, HEAD_NAMES, SCALE_NAMES, SHAPE_NAMES, STYLE_NAMES } from "./names.ts";
+import { CAPTION_ALIGN_NAMES, DIRECTION_NAMES, HEAD_NAMES, SCALE_NAMES, SHAPE_NAMES, STYLE_NAMES } from "./names.ts";
 import { NOTHING } from "./state.ts";
 import type { Editor } from "./state.ts";
 
@@ -46,15 +46,46 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
     if (selection.kind === "line") lineFields(document, selection.index);
     else if (selection.kind === "shapes" && selection.ids.length > 1) severalShapes(selection.ids);
     else if (selection.kind === "shapes") shapeFields(document, selection.ids[0]!);
-    else nothingSelected();
+    else nothingSelected(document);
   }
 
-  function nothingSelected() {
+  function nothingSelected(document: Document) {
     panel.append(
       html("p", { class: "muted" }, "図形を選ぶと、ここで編集できます。"),
       html("ul", { class: "help" }, ...HELP.map((line) => html("li", {}, line))),
-      button("Law図 について", openAbout, { class: "link" }),
     );
+    captionFields(document);
+    panel.append(button("Law図 について", openAbout, { class: "link" }));
+  }
+
+  // 図の下の文(caption)。書いた順に並べ、それぞれ文、揃え、大きさを変えられる
+  function captionFields(document: Document) {
+    const section = html("section", { class: "captions" }, html("h2", {}, "図の下の文"));
+    edit.captions(document).forEach((statement, index) => {
+      const change = (next: CaptionStatement | null) =>
+        editor.commit(edit.replaceCaption(editor.text, document, index, next));
+      const text = html("textarea", { rows: "3" }) as HTMLTextAreaElement;
+      text.value = statement.text;
+      text.addEventListener("change", () => change(text.value === "" ? null : { ...statement, text: text.value }));
+      section.append(
+        html("label", { class: "field" }, `文 ${index + 1}`, text),
+        html(
+          "div",
+          { class: "pair" },
+          choice("揃え", CAPTION_ALIGNS, CAPTION_ALIGN_NAMES, statement.align ?? "left", (align) =>
+            change({ ...statement, align: align === "left" ? null : align }),
+          ),
+          choice("大きさ", SCALES, SCALE_NAMES, statement.size ?? "medium", (size) =>
+            change({ ...statement, size: size === "medium" ? null : size }),
+          ),
+        ),
+        html("div", { class: "row" }, button("この文を消す", () => change(null), { class: "small" })),
+      );
+    });
+    section.append(
+      html("div", { class: "row" }, button("文を足す", () => editor.commit(edit.addCaption(editor.text, "文")))),
+    );
+    panel.append(section);
   }
 
   function severalShapes(ids: string[]) {

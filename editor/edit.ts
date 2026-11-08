@@ -1,6 +1,14 @@
 // .zu の文字を、文の単位で書き換える。DOM を知らないので Node でも試せる
 import { print } from "../src/index.ts";
-import type { Arrow, Document, LineStatement, ShapeStatement, SourcePosition, Statement } from "../src/index.ts";
+import type {
+  Arrow,
+  CaptionStatement,
+  Document,
+  LineStatement,
+  ShapeStatement,
+  SourcePosition,
+  Statement,
+} from "../src/index.ts";
 
 // 行と列(1から、字は code point で数える)を文字列の添字にする
 export function offsetOf(text: string, { line, column }: SourcePosition) {
@@ -101,6 +109,7 @@ export function dependents(document: Document, id: string) {
 // 名前を変え、参照している置き方、揃え、線も書き換える
 export function rename(text: string, document: Document, from: string, to: string) {
   return rewrite(text, document, (statement) => {
+    if (statement.kind === "caption") return undefined;
     if (statement.kind === "align") {
       if (!statement.members.some(({ id }) => id === from)) return undefined;
       return { ...statement, members: statement.members.map((m) => (m.id === from ? { ...m, id: to } : m)) };
@@ -176,4 +185,21 @@ export function replaceLine(text: string, document: Document, index: number, nex
 export function lineAtLine(document: Document, line: number) {
   const index = lines(document).findIndex((statement) => statement.at.line === line);
   return index === -1 ? null : index;
+}
+
+// --- 図の下の文 ---
+
+export function captions(document: Document) {
+  return document.statements.filter((statement) => statement.kind === "caption");
+}
+
+export function addCaption(text: string, caption: string) {
+  const at = { line: 0, column: 0 };
+  return append(text, { kind: "caption", text: caption, align: null, size: null, at, end: at });
+}
+
+// 書いた順の番号で指す(図の data-caption と同じ番号)。next が null なら消す
+export function replaceCaption(text: string, document: Document, index: number, next: CaptionStatement | null) {
+  const target = captions(document)[index];
+  return rewrite(text, document, (statement) => (statement === target ? next : undefined));
 }

@@ -507,6 +507,18 @@ main {
   background: var(--surface);
 }
 
+.captions {
+  margin: 16px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.captions h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .check {
   display: flex;
   align-items: center;
