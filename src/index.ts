@@ -21,31 +21,39 @@ export { parse } from "./syntax/parser.ts";
 export { tokenize } from "./syntax/lexer.ts";
 export type { Token, TokenType } from "./syntax/lexer.ts";
 export { print } from "./syntax/print.ts";
-export { AXES, CAPTION_ALIGNS, DIRECTIONS, HEADS, LINE_STYLES, SCALES, SHAPES } from "./syntax/ast.ts";
+export { AXES, DIRECTIONS, HEADS, JUSTIFICATIONS, LINE_STYLES, SCALES, SHAPES } from "./syntax/ast.ts";
 export type {
   AlignStatement,
-  Arrow,
   Axis,
-  CaptionAlign,
   CaptionStatement,
   Direction,
   Document,
   Head,
-  LineEndpoint,
+  Justify,
+  LineEnd,
   LineStatement,
   LineStyle,
   Placement,
   Scale,
   Shape,
   ShapeStatement,
-  SizeOption,
+  Size,
   SourcePosition,
   Statement,
 } from "./syntax/ast.ts";
 
 // 配置
 export { DEFAULT_GAP, PADDING, defaultGap, layout } from "./layout/layout.ts";
-export type { Box, Geometry, PlacedCaption, PlacedLine, PlacedShape, Point, Scene } from "./layout/layout.ts";
+export type {
+  Box,
+  Geometry,
+  PlacedCaption,
+  PlacedEnd,
+  PlacedLine,
+  PlacedShape,
+  Point,
+  Scene,
+} from "./layout/layout.ts";
 
 // 描画
 export { toSvg } from "./svg/svg.ts";

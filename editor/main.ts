@@ -69,7 +69,7 @@ function selectFromCursor() {
   if (!document || editor.broken) return;
   const line = source.value.slice(0, source.selectionStart).split("\n").length;
   const id = edit.shapeAtLine(document, line);
-  const index = edit.lineAtLine(document, line);
+  const index = edit.indexAtLine(document, "line", line);
   const { selection } = editor;
   if (id !== null) {
     if (selection.kind !== "shapes" || selection.ids.length !== 1 || selection.ids[0] !== id) {

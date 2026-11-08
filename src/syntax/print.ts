@@ -1,7 +1,7 @@
 // 文を zu の文字に戻す。parse の逆で、エディタが文を書き換えるときに使う。
 // 書き方の揺れ(of の有無、数の間の「,」)は一つの形にそろえる
 import { writeArrow } from "./arrow.ts";
-import type { Placement, Statement } from "./ast.ts";
+import type { Placement, Size, Statement } from "./ast.ts";
 
 const ESCAPED: Record<string, string> = { '"': '\\"', "\\": "\\\\", "\n": "\\n" };
 
@@ -20,30 +20,37 @@ export function printPlacement(placement: Placement) {
   return `${placement.direction} of ${placement.of}${gap}`;
 }
 
+function printSize(size: Size) {
+  if (size.kind === "scale") return `size ${size.scale}`;
+  const height = size.height === null ? "" : ` ${number(size.height)}`;
+  return `size ${number(size.width)}${height}`;
+}
+
 export function print(statement: Statement) {
-  if (statement.kind === "line") {
-    const label = statement.label === null ? "" : ` ${quote(statement.label)}`;
-    const into = [statement.from, statement.to].filter((end) => end.into).map((end) => end.id);
-    const deep = into.length === 0 ? "" : ` into ${into.join(" ")}`;
-    return `${statement.from.id} ${writeArrow(statement.arrow)} ${statement.to.id}${label}${deep}`;
-  }
-  if (statement.kind === "caption") {
-    const parts = ["caption", quote(statement.text)];
-    if (statement.align) parts.push(statement.align);
-    if (statement.size) parts.push(`size ${statement.size}`);
-    return parts.join(" ");
-  }
-  if (statement.kind === "align") {
-    return ["align", statement.axis, ...statement.members.map(({ id }) => id)].join(" ");
-  }
-  const parts: string[] = [statement.shape, statement.id];
-  if (statement.label !== null) parts.push(quote(statement.label));
-  if (statement.placement) parts.push(printPlacement(statement.placement));
-  if (typeof statement.size === "string") {
-    parts.push(`size ${statement.size}`);
-  } else if (statement.size) {
-    const { width, height } = statement.size;
-    parts.push(height === null ? `size ${number(width)}` : `size ${number(width)} ${number(height)}`);
+  const parts: string[] = [];
+  switch (statement.kind) {
+    case "line": {
+      const { style, from, to, label } = statement;
+      parts.push(from.id, writeArrow({ style, start: from.head, end: to.head }), to.id);
+      if (label !== null) parts.push(quote(label));
+      const into = [from, to].filter((end) => end.into).map((end) => end.id);
+      if (into.length > 0) parts.push("into", ...into);
+      break;
+    }
+    case "align":
+      parts.push("align", statement.axis, ...statement.members.map(({ id }) => id));
+      break;
+    case "caption":
+      parts.push("caption", quote(statement.text));
+      if (statement.justify) parts.push(statement.justify);
+      if (statement.size) parts.push(`size ${statement.size}`);
+      break;
+    case "shape":
+      parts.push(statement.shape, statement.id);
+      if (statement.label !== null) parts.push(quote(statement.label));
+      if (statement.placement) parts.push(printPlacement(statement.placement));
+      if (statement.size) parts.push(printSize(statement.size));
+      break;
   }
   return parts.join(" ");
 }

@@ -135,18 +135,18 @@ test("a line runs between the bodies, stopping short of their outlines", () => {
   const [a, b] = scene.shapes;
   const [line] = scene.lines;
   // 本体の中心どうしは同じ高さなので、線は水平
-  close(line!.start.y, a!.anchor.y);
-  close(line!.end.y, b!.anchor.y);
-  close(line!.start.x, a!.box.x + a!.box.width + 6);
+  close(line!.from.point.y, a!.anchor.y);
+  close(line!.to.point.y, b!.anchor.y);
+  close(line!.from.point.x, a!.box.x + a!.box.width + 6);
   // 立方体はラベルを除いた本体の枠で切る(ラベルの幅は本体より狭い)
-  close(line!.end.x, b!.anchor.x - (40 + 12) / 2 - 6);
+  close(line!.to.point.x, b!.anchor.x - (40 + 12) / 2 - 6);
 });
 
 test("lines between the same pair are drawn side by side, and labels sit in the middle", () => {
   const scene = layout(parse('text a\ntext b right of a by 200\na ---> b "行き"\nb ---> a'));
   const [go, back] = scene.lines;
-  close(Math.abs(go!.start.y - back!.start.y), 16);
-  const middle = (go!.start.x + go!.end.x) / 2;
+  close(Math.abs(go!.from.point.y - back!.from.point.y), 16);
+  const middle = (go!.from.point.x + go!.to.point.x) / 2;
   close(go!.labelBox!.x + go!.labelBox!.width / 2, middle);
   assert.equal(back!.labelBox, null);
 });
@@ -191,7 +191,8 @@ test("shapes joined by a labelled line are spaced so the label and arrowheads fi
   const [a, b] = scene.shapes;
   const gap = b!.box.x - (a!.box.x + a!.box.width);
   assert.ok(gap > DEFAULT_GAP);
-  const { start, end, labelBox } = scene.lines[0]!;
+  const { from, to, labelBox } = scene.lines[0]!;
+  const [start, end] = [from.point, to.point];
   // ラベルは両端の矢先(長さ 12)にかからない
   assert.ok(labelBox!.x > start.x + 12);
   assert.ok(labelBox!.x + labelBox!.width < end.x - 12);
@@ -223,7 +224,7 @@ test("three shapes joined in a triangle get room for the labels on the other two
   }
   // 平行な2本のラベルは、2本の外側に上下に分かれる
   const [, , upper, lower] = scene.lines;
-  const sides = [upper!, lower!].map(({ labelBox, start }) => Math.sign(labelBox!.y + labelBox!.height / 2 - start.y));
+  const sides = [upper!, lower!].map(({ labelBox, from }) => Math.sign(labelBox!.y + labelBox!.height / 2 - from.point.y));
   assert.deepEqual(sides.sort(), [-1, 1]);
 });
 
@@ -249,7 +250,8 @@ test("a line drawn into a shape ends inside its front face, and drawn over the s
   const source = "text a\ncube b right of a by 100\na ---o b into b";
   const scene = layout(parse(source));
   const b = scene.shapes[1]!;
-  const { end, over } = scene.lines[0]!;
+  const { to, over } = scene.lines[0]!;
+  const end = to.point;
   assert.equal(over, true);
   // 正面は立方体の左下。線は正面の左の縁から 10 入った所で止まる
   const front = { x: b.anchor.x - (40 + 12) / 2, y: b.box.y + 12 };
@@ -263,7 +265,7 @@ test("several lines drawn into one shape end apart from each other", () => {
   const scene = layout(
     parse("cube t\ntext a at -200 -10\ntext b at -200 0\ntext c at -200 10\na ---o t into t\nb ---o t into t\nc ---o t into t"),
   );
-  const tips = scene.lines.map(({ end }) => end);
+  const tips = scene.lines.map(({ to }) => to.point);
   for (let i = 0; i < tips.length; i++) {
     for (let j = i + 1; j < tips.length; j++) {
       assert.ok(Math.hypot(tips[i]!.x - tips[j]!.x, tips[i]!.y - tips[j]!.y) >= 12 - 1e-9, `${i} と ${j} が近い`);

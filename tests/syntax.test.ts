@@ -54,7 +54,7 @@ test("a statement holds the shape, name, label, placement and size", () => {
         id: "b",
         label: null,
         placement: { kind: "beside", direction: "right", of: "a", gap: 30, at: undefined },
-        size: { width: 50, height: null },
+        size: { kind: "numbers", width: 50, height: null },
       },
       {
         kind: "shape",
@@ -129,7 +129,9 @@ test("printing a statement gives back the same statement", () => {
 
 test("arrows are read as one token and turned into style and heads", () => {
   const arrows = (source: string) =>
-    parse(source).statements.map((statement) => (statement.kind === "line" ? statement.arrow : null));
+    parse(source).statements.map((statement) =>
+      statement.kind === "line" ? { style: statement.style, start: statement.from.head, end: statement.to.head } : null,
+    );
   assert.deepEqual(arrows("a --- b\na -.-> b\na ===>> b\na <---o b\na o-..-o b\na -- b"), [
     { style: "solid", start: "none", end: "none" },
     { style: "dotted", start: "none", end: "open" },
@@ -146,9 +148,9 @@ test("a line statement holds both ends, the arrow and the label", () => {
   const [statement] = parse('a <<--->> b "代理権の授与" %% メモ').statements;
   assert.deepEqual(statement, {
     kind: "line",
-    from: { id: "a", at: { line: 1, column: 1 }, into: false },
-    to: { id: "b", at: { line: 1, column: 11 }, into: false },
-    arrow: { style: "solid", start: "filled", end: "filled" },
+    style: "solid",
+    from: { id: "a", at: { line: 1, column: 1 }, head: "filled", into: false },
+    to: { id: "b", at: { line: 1, column: 11 }, head: "filled", into: false },
     label: "代理権の授与",
     at: { line: 1, column: 1 },
     end: { line: 1, column: 21 },
@@ -173,9 +175,15 @@ test("into names the ends drawn into their shapes", () => {
   assertError("a --- b into", 1, 13, /中まで伸ばす図形の名前が必要です/);
 });
 
+test("size fits the shape: none for text, one number for a cube", () => {
+  assertError("text a size 10", 1, 8, /text には size を書けません/);
+  assertError("cube a size 40 50", 1, 13, /cube の size は一辺を1つだけ書きます/);
+  assert.equal(parse("parallelogram a size 100 40\ncube b size 40").statements.length, 2);
+});
+
 test("size takes a word as well as numbers", () => {
   const [shape] = parse("cube a size small").statements;
-  assert.ok(shape?.kind === "shape" && shape.size === "small");
+  assert.ok(shape?.kind === "shape" && shape.size?.kind === "scale" && shape.size.scale === "small");
   assertError("cube a size huge", 1, 13, /大きさは数か small、medium、large で書きます/);
   assert.equal(print(parse("cube a size large").statements[0]!), "cube a size large");
 });
@@ -192,7 +200,7 @@ test("a caption holds its text, alignment and size, and prints back", () => {
   assert.deepEqual(caption, {
     kind: "caption",
     text: "一行目\n二行目",
-    align: "right",
+    justify: "right",
     size: "small",
     at: { line: 1, column: 1 },
     end: { line: 1, column: 36 },

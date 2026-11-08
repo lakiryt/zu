@@ -1,5 +1,8 @@
-// 線の記号(---> など)と Arrow の行き来
-import type { Arrow, Head, LineStyle } from "./ast.ts";
+// 線の記号(o--->> など)と、線の種類・両端の印との行き来
+import type { Head, LineStyle } from "./ast.ts";
+
+// 線の記号から読み取れるもの。start は記号の左の端、end は右の端の印
+export type Arrow = { style: LineStyle; start: Head; end: Head };
 
 // 左の端、線の本体、右の端。本体は --(2本以上)、-.-(点は1つ以上)、==(2本以上)
 const PATTERN = /^(<<|<|o)?(-\.+-|-{2,}|={2,})(>>|>|o)?$/;

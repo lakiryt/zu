@@ -1,14 +1,16 @@
 // .zu の文字を、文の単位で書き換える。DOM を知らないので Node でも試せる
 import { print } from "../src/index.ts";
-import type {
-  Arrow,
-  CaptionStatement,
-  Document,
-  LineStatement,
-  ShapeStatement,
-  SourcePosition,
-  Statement,
-} from "../src/index.ts";
+import type { Axis, Document, LineEnd, ShapeStatement, SourcePosition, Statement } from "../src/index.ts";
+
+// エディタが作る文の位置。書き出すと print で文字になるので、位置は使わない
+export const NOWHERE: SourcePosition = { line: 0, column: 0 };
+
+// 図の操作が書き換えにならなかったときの誤り。文字の誤り(ZuError)と違い、行と列を持たない
+export class EditError extends Error {
+  override readonly name = "EditError";
+}
+
+// --- 文字と文 ---
 
 // 行と列(1から、字は code point で数える)を文字列の添字にする
 export function offsetOf(text: string, { line, column }: SourcePosition) {
@@ -39,33 +41,53 @@ export function rewrite(text: string, document: Document, fn: (statement: Statem
   return result;
 }
 
+export function append(text: string, statement: Statement) {
+  const base = text === "" || text.endsWith("\n") ? text : `${text}\n`;
+  return `${base}${print(statement)}\n`;
+}
+
+type Of<K extends Statement["kind"]> = Extract<Statement, { kind: K }>;
+
+// kind の文を書いた順に。線と図の下の文は名前を持たないので、この順の番号で指す(図の data-line、data-caption と同じ番号)
+export function statementsOf<K extends Statement["kind"]>(document: Document, kind: K): Of<K>[] {
+  return document.statements.filter((statement): statement is Of<K> => statement.kind === kind);
+}
+
+// kind の文のうち index 番目を next に置き換える。null なら消す
+export function replaceNth<K extends Statement["kind"]>(
+  text: string,
+  document: Document,
+  kind: K,
+  index: number,
+  next: Of<K> | null,
+) {
+  const target = statementsOf(document, kind)[index];
+  return rewrite(text, document, (statement) => (statement === target ? next : undefined));
+}
+
+// 文字の位置(行)にある kind の文の番号
+export function indexAtLine(document: Document, kind: Statement["kind"], line: number) {
+  const index = statementsOf(document, kind).findIndex((statement) => statement.at.line === line);
+  return index === -1 ? null : index;
+}
+
+// --- 図形 ---
+
+export const shapes = (document: Document) => statementsOf(document, "shape");
+
+export function findShape(document: Document, id: string) {
+  return shapes(document).find((statement) => statement.id === id);
+}
+
 export function replaceShape(text: string, document: Document, next: ShapeStatement) {
   return rewrite(text, document, (statement) =>
     statement.kind === "shape" && statement.id === next.id ? next : undefined,
   );
 }
 
-export function append(text: string, statement: Statement) {
-  const base = text === "" || text.endsWith("\n") ? text : `${text}\n`;
-  return `${base}${print(statement)}\n`;
-}
-
-export function shapes(document: Document) {
-  return document.statements.filter((statement) => statement.kind === "shape");
-}
-
-export function findShape(document: Document, id: string) {
-  return shapes(document).find((statement) => statement.id === id);
-}
-
 export function freshId(document: Document, base = "図形") {
   const used = new Set(shapes(document).map(({ id }) => id));
   for (let n = 1; ; n++) if (!used.has(`${base}${n}`)) return `${base}${n}`;
-}
-
-// 図の操作が書き換えにならなかったときの誤り。文字の誤り(ZuError)と違い、行と列を持たない
-export class EditError extends Error {
-  override readonly name = "EditError";
 }
 
 // 位置を決める基準の図形(list は図形の文を書いた順に並べたもの)。
@@ -78,10 +100,8 @@ export function baseOf(list: ShapeStatement[], index: number) {
 }
 
 // 数を書いている図形か(エディタで印を付ける)
-export function usesNumbers(statement: ShapeStatement) {
-  const { placement, size } = statement;
-  const sized = size !== null && typeof size !== "string";
-  return placement?.kind === "at" || (placement?.kind === "beside" && placement.gap !== null) || sized;
+export function usesNumbers({ placement, size }: ShapeStatement) {
+  return placement?.kind === "at" || (placement?.kind === "beside" && placement.gap !== null) || size?.kind === "numbers";
 }
 
 // id の図形の位置が変わるとついてくる図形(置き方をたどって id に行き着くもの)。
@@ -108,53 +128,24 @@ export function dependents(document: Document, id: string) {
 
 // 名前を変え、参照している置き方、揃え、線も書き換える
 export function rename(text: string, document: Document, from: string, to: string) {
+  const swap = <T extends { id: string }>(item: T): T => (item.id === from ? { ...item, id: to } : item);
   return rewrite(text, document, (statement) => {
-    if (statement.kind === "caption") return undefined;
-    if (statement.kind === "align") {
-      if (!statement.members.some(({ id }) => id === from)) return undefined;
-      return { ...statement, members: statement.members.map((m) => (m.id === from ? { ...m, id: to } : m)) };
+    switch (statement.kind) {
+      case "caption":
+        return undefined;
+      case "align":
+        if (!statement.members.some(({ id }) => id === from)) return undefined;
+        return { ...statement, members: statement.members.map(swap) };
+      case "line":
+        if (statement.from.id !== from && statement.to.id !== from) return undefined;
+        return { ...statement, from: swap(statement.from), to: swap(statement.to) };
+      case "shape": {
+        const { placement } = statement;
+        const refers = placement?.kind === "beside" && placement.of === from;
+        if (statement.id !== from && !refers) return undefined;
+        return { ...swap(statement), placement: refers ? { ...placement, of: to } : placement };
+      }
     }
-    if (statement.kind === "line") {
-      if (statement.from.id !== from && statement.to.id !== from) return undefined;
-      const swap = (end: LineStatement["from"]) => (end.id === from ? { ...end, id: to } : end);
-      return { ...statement, from: swap(statement.from), to: swap(statement.to) };
-    }
-    const own = statement.id === from;
-    const refers = statement.placement?.kind === "beside" && statement.placement.of === from;
-    if (!own && !refers) return undefined;
-    return {
-      ...statement,
-      id: own ? to : statement.id,
-      placement:
-        refers && statement.placement?.kind === "beside" ? { ...statement.placement, of: to } : statement.placement,
-    };
-  });
-}
-
-// 揃えを足す。同じ向きの揃えに既に入っている図形があれば、その揃えに加える
-export function addAlign(text: string, document: Document, axis: "row" | "column", ids: string[]) {
-  const existing = document.statements.find(
-    (statement) => statement.kind === "align" && statement.axis === axis && statement.members.some((m) => ids.includes(m.id)),
-  );
-  if (existing && existing.kind === "align") {
-    const have = new Set(existing.members.map((m) => m.id));
-    const added = ids.filter((id) => !have.has(id)).map((id) => ({ id, at: existing.at }));
-    if (added.length === 0) return text;
-    return rewrite(text, document, (statement) =>
-      statement === existing ? { ...existing, members: [...existing.members, ...added] } : undefined,
-    );
-  }
-  const at = { line: 0, column: 0 };
-  return append(text, { kind: "align", axis, members: ids.map((id) => ({ id, at })), at, end: at });
-}
-
-// 揃えから外す。残りが1つになった揃えは消す
-export function leaveAlign(text: string, document: Document, axis: "row" | "column", id: string) {
-  return rewrite(text, document, (statement) => {
-    if (statement.kind !== "align" || statement.axis !== axis) return undefined;
-    if (!statement.members.some((m) => m.id === id)) return undefined;
-    const members = statement.members.filter((m) => m.id !== id);
-    return members.length < 2 ? null : { ...statement, members };
   });
 }
 
@@ -163,43 +154,42 @@ export function shapeAtLine(document: Document, line: number) {
   return shapes(document).find((statement) => statement.at.line === line)?.id ?? null;
 }
 
-// --- 線 ---
+// --- 揃え ---
 
-export function lines(document: Document) {
-  return document.statements.filter((statement) => statement.kind === "line");
+// 揃えを足す。同じ向きの揃えに既に入っている図形があれば、その揃えに加える
+export function addAlign(text: string, document: Document, axis: Axis, ids: string[]) {
+  const existing = statementsOf(document, "align").find(
+    (statement) => statement.axis === axis && statement.members.some((m) => ids.includes(m.id)),
+  );
+  if (!existing) {
+    const members = ids.map((id) => ({ id, at: NOWHERE }));
+    return append(text, { kind: "align", axis, members, at: NOWHERE, end: NOWHERE });
+  }
+  const have = new Set(existing.members.map((m) => m.id));
+  const added = ids.filter((id) => !have.has(id)).map((id) => ({ id, at: NOWHERE }));
+  if (added.length === 0) return text;
+  return rewrite(text, document, (statement) =>
+    statement === existing ? { ...existing, members: [...existing.members, ...added] } : undefined,
+  );
 }
 
-// 線は名前を持たないので、書いた順の番号で指す(図の data-line と同じ番号)
+// 揃えから外す。残りが1つになった揃えは消す
+export function leaveAlign(text: string, document: Document, axis: Axis, id: string) {
+  return rewrite(text, document, (statement) => {
+    if (statement.kind !== "align" || statement.axis !== axis) return undefined;
+    if (!statement.members.some((m) => m.id === id)) return undefined;
+    const members = statement.members.filter((m) => m.id !== id);
+    return members.length < 2 ? null : { ...statement, members };
+  });
+}
+
+// --- 線と図の下の文 ---
+
 export function addLine(text: string, from: string, to: string) {
-  const at = { line: 0, column: 0 };
-  const arrow: Arrow = { style: "solid", start: "none", end: "none" };
-  return append(text, { kind: "line", from: { id: from, at, into: false }, to: { id: to, at, into: false }, arrow, label: null, at, end: at });
-}
-
-export function replaceLine(text: string, document: Document, index: number, next: LineStatement | null) {
-  const target = lines(document)[index];
-  return rewrite(text, document, (statement) => (statement === target ? next : undefined));
-}
-
-// 文字の位置(行)にある線の番号
-export function lineAtLine(document: Document, line: number) {
-  const index = lines(document).findIndex((statement) => statement.at.line === line);
-  return index === -1 ? null : index;
-}
-
-// --- 図の下の文 ---
-
-export function captions(document: Document) {
-  return document.statements.filter((statement) => statement.kind === "caption");
+  const end = (id: string): LineEnd => ({ id, at: NOWHERE, head: "none", into: false });
+  return append(text, { kind: "line", style: "solid", from: end(from), to: end(to), label: null, at: NOWHERE, end: NOWHERE });
 }
 
 export function addCaption(text: string, caption: string) {
-  const at = { line: 0, column: 0 };
-  return append(text, { kind: "caption", text: caption, align: null, size: null, at, end: at });
-}
-
-// 書いた順の番号で指す(図の data-caption と同じ番号)。next が null なら消す
-export function replaceCaption(text: string, document: Document, index: number, next: CaptionStatement | null) {
-  const target = captions(document)[index];
-  return rewrite(text, document, (statement) => (statement === target ? next : undefined));
+  return append(text, { kind: "caption", text: caption, justify: null, size: null, at: NOWHERE, end: NOWHERE });
 }

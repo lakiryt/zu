@@ -8,7 +8,16 @@
 //    だめなら間を書いた関係で位置をぴったり保ち、それもだめなら座標のまま残す
 // 3. 座標が1つだけ残り、それを最初の図形にできるなら、置き方なしにする
 import { DEFAULT_GAP, ZuError, defaultGap, layout, parse, print } from "../src/index.ts";
-import type { Direction, Document, PlacedShape, Placement, Point, Scene, ShapeStatement, Statement } from "../src/index.ts";
+import type {
+  AlignStatement,
+  Direction,
+  Document,
+  PlacedShape,
+  Placement,
+  Point,
+  Scene,
+  ShapeStatement,
+} from "../src/index.ts";
 import * as edit from "./edit.ts";
 import { placementsFor, slots } from "./snap.ts";
 
@@ -21,22 +30,6 @@ function tryLayout(text: string): Scene | null {
     if (error instanceof ZuError) return null;
     throw error;
   }
-}
-
-// 図形の位置が desired のとおりか。全体の平行移動は問わない(出力では全体をずらすので)
-function matches(text: string, desired: Map<string, Point>) {
-  const scene = tryLayout(text);
-  if (!scene) return false;
-  const now = new Map(scene.shapes.map((shape) => [shape.id, shape.anchor]));
-  let offset: Point | null = null;
-  for (const [id, wanted] of desired) {
-    const actual = now.get(id);
-    if (!actual) return false;
-    offset ??= { x: actual.x - wanted.x, y: actual.y - wanted.y };
-    if (Math.abs(actual.x - offset.x - wanted.x) > TOLERANCE) return false;
-    if (Math.abs(actual.y - offset.y - wanted.y) > TOLERANCE) return false;
-  }
-  return true;
 }
 
 const atPoint = (point: Point, origin: Point): Placement => ({
@@ -60,8 +53,9 @@ function placedAt(sizes: PlacedShape[], desired: Map<string, Point>) {
     });
 }
 
-// affected 以外の図形が desired どおりなら、全図形の位置を desired と同じ座標で返す
-function measure(text: string, desired: Map<string, Point>, affected: Set<string>) {
+// affected 以外の図形が desired どおりなら、全図形の位置を desired と同じ座標で返す。
+// 全体の平行移動は問わない(出力では全体をずらすので)
+function measure(text: string, desired: Map<string, Point>, affected = new Set<string>()) {
   const scene = tryLayout(text);
   if (!scene) return null;
   const now = new Map(scene.shapes.map((shape) => [shape.id, shape.anchor]));
@@ -77,6 +71,9 @@ function measure(text: string, desired: Map<string, Point>, affected: Set<string
   const shift = offset ?? { x: 0, y: 0 };
   return new Map([...now].map(([id, point]) => [id, { x: point.x - shift.x, y: point.y - shift.y }]));
 }
+
+// 図形の位置が desired のとおりか
+const matches = (text: string, desired: Map<string, Point>) => measure(text, desired) !== null;
 
 // 2 と 3 の段。loose の図形を数の少ない置き方にする。試す順:
 // 元の置き方でぴったり → 数のいらない置き方で近く(いちばん近いもの) → 間を書いてぴったり → 座標のまま
@@ -105,7 +102,7 @@ function tidy(text: string, loose: string[], desired: Map<string, Point>, sizes:
     const plain: (Placement | null)[] = [
       null,
       ...slots(placed, self, excluded, gapOf).map(
-        (slot): Placement => ({ kind: "beside", direction: slot.direction, of: slot.of, gap: null, at: statement.at }),
+        (slot): Placement => ({ kind: "beside", direction: slot.direction, of: slot.of, gap: null, at: edit.NOWHERE }),
       ),
     ];
     let best: { text: string; distance: number; positions: Map<string, Point>; affected: Set<string> } | null = null;
@@ -166,8 +163,6 @@ export type Move = {
   placement: Placement | null;
 };
 
-
-type AlignStatement = Extract<Statement, { kind: "align" }>;
 
 // 揃えから外す図形を決め、揃えの書き換えと、揃えが変わって付け替えが要る図形を返す。
 // 揃えから図形が抜けると、残った図形の段や列が変わることがあるので、残った図形も付け替える

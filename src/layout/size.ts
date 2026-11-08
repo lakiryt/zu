@@ -1,5 +1,5 @@
 // 図形の大きさと、描くのに要る寸法を決める。位置は知らない
-import type { Scale, Shape, ShapeStatement } from "../syntax/ast.ts";
+import type { Scale, ShapeStatement } from "../syntax/ast.ts";
 import type { Box, Point } from "./geometry.ts";
 import { measureText } from "./measure.ts";
 
@@ -25,52 +25,54 @@ export type Sized = { width: number; height: number; anchorTop: number; geometry
 
 export function sizeOf(statement: ShapeStatement): Sized {
   const text = measureText(statement.label ?? statement.id);
-  const shape: Shape = statement.shape;
-  if (shape === "text") return { ...text, anchorTop: text.height / 2, geometry: { shape } };
+  const { size } = statement;
+  const scale = size?.kind === "scale" ? size.scale : "medium";
+  const numbers = size?.kind === "numbers" ? size : null;
 
-  const scale = typeof statement.size === "string" ? statement.size : "medium";
-  const numbers = typeof statement.size === "string" ? null : statement.size;
+  switch (statement.shape) {
+    case "text":
+      return { ...text, anchorTop: text.height / 2, geometry: { shape: "text" } };
 
-  if (shape === "parallelogram") {
-    const preset = PARALLELOGRAM_SCALES[scale];
-    const height = numbers?.height ?? preset.height;
-    const skew = height * PARALLELOGRAM.skewRatio;
-    const fitted = Math.max(preset.minWidth, text.width + PARALLELOGRAM.padding * 2 + skew);
-    return { width: numbers?.width ?? fitted, height, anchorTop: height / 2, geometry: { shape, skew } };
+    case "parallelogram": {
+      const preset = PARALLELOGRAM_SCALES[scale];
+      const height = numbers?.height ?? preset.height;
+      const skew = height * PARALLELOGRAM.skewRatio;
+      const fitted = Math.max(preset.minWidth, text.width + PARALLELOGRAM.padding * 2 + skew);
+      return { width: numbers?.width ?? fitted, height, anchorTop: height / 2, geometry: { shape: "parallelogram", skew } };
+    }
+
+    case "cube": {
+      const edge = numbers?.width ?? CUBE_SCALES[scale];
+      const depth = edge * CUBE.depthRatio;
+      return {
+        width: Math.max(edge + depth, text.width),
+        height: edge + depth + CUBE.labelGap + text.height,
+        anchorTop: (edge + depth) / 2,
+        geometry: { shape: "cube", edge, depth, labelTop: edge + depth + CUBE.labelGap },
+      };
+    }
   }
-
-  const edge = numbers?.width ?? CUBE_SCALES[scale];
-  const depth = edge * CUBE.depthRatio;
-  return {
-    width: Math.max(edge + depth, text.width),
-    height: edge + depth + CUBE.labelGap + text.height,
-    anchorTop: (edge + depth) / 2,
-    geometry: { shape, edge, depth, labelTop: edge + depth + CUBE.labelGap },
-  };
 }
 
-// 本体の中心を anchor に置いたときの外枠
-export function boxAt(size: Sized, anchor: Point): Box {
-  return { x: anchor.x - size.width / 2, y: anchor.y - size.anchorTop, width: size.width, height: size.height };
-}
-
-// 本体の枠(線を切る枠)。立方体はラベルを除いた立方体の部分
-export function bodyOf(size: Sized, anchor: Point, box: Box): Box {
+// 本体の中心を anchor に置いたときの枠。
+// box は外枠、body は本体の枠(線を切る枠。立方体はラベルを除いた立方体の部分)、
+// inner は線を中まで伸ばす(into)ときに端を置いてよい枠(図形の内側に収まる長方形。立方体は正面、
+// 平行四辺形は斜めの辺を除いた部分)
+export function frameAt(size: Sized, anchor: Point): { box: Box; body: Box; inner: Box } {
+  const box = { x: anchor.x - size.width / 2, y: anchor.y - size.anchorTop, width: size.width, height: size.height };
   const { geometry } = size;
-  if (geometry.shape !== "cube") return box;
-  const side = geometry.edge + geometry.depth;
-  return { x: anchor.x - side / 2, y: box.y, width: side, height: side };
-}
-
-// 線を中まで伸ばすとき(into)に、線の端を置いてよい枠。図形の内側に収まる長方形にする。
-// 立方体は正面、平行四辺形は斜めの辺を除いた部分
-export function innerOf(size: Sized, body: Box): Box {
-  const { geometry } = size;
-  if (geometry.shape === "cube") {
-    return { x: body.x, y: body.y + geometry.depth, width: geometry.edge, height: geometry.edge };
+  switch (geometry.shape) {
+    case "text":
+      return { box, body: box, inner: box };
+    case "parallelogram": {
+      const inner = { ...box, x: box.x + geometry.skew, width: Math.max(0, box.width - geometry.skew * 2) };
+      return { box, body: box, inner };
+    }
+    case "cube": {
+      const side = geometry.edge + geometry.depth;
+      const body = { x: anchor.x - side / 2, y: box.y, width: side, height: side };
+      const inner = { x: body.x, y: body.y + geometry.depth, width: geometry.edge, height: geometry.edge };
+      return { box, body, inner };
+    }
   }
-  if (geometry.shape === "parallelogram") {
-    return { x: body.x + geometry.skew, y: body.y, width: Math.max(0, body.width - geometry.skew * 2), height: body.height };
-  }
-  return body;
 }

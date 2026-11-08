@@ -12,8 +12,8 @@ export type Direction = (typeof DIRECTIONS)[number];
 export const SCALES = ["small", "medium", "large"] as const;
 export type Scale = (typeof SCALES)[number];
 
-// size の書き方。数(幅と高さ。立方体は一辺)か、大きさの語
-export type SizeOption = { width: number; height: number | null } | Scale;
+// size の書き方。大きさの語か、数(幅と高さ。立方体は一辺だけ使う)
+export type Size = { kind: "scale"; scale: Scale } | { kind: "numbers"; width: number; height: number | null };
 
 export type Placement =
   | { kind: "at"; x: number; y: number }
@@ -27,7 +27,7 @@ export type ShapeStatement = {
   // null なら id をラベルにする
   label: string | null;
   placement: Placement | null;
-  size: SizeOption | null;
+  size: Size | null;
   at: SourcePosition;
   // 文の最後の字句の直後(行末のコメントは含まない)
   end: SourcePosition;
@@ -49,35 +49,33 @@ export type AlignStatement = {
 export const LINE_STYLES = ["solid", "dotted", "double"] as const;
 export type LineStyle = (typeof LINE_STYLES)[number];
 
-// 線の端。open は V 字の矢印(>)、filled は塗りつぶした三角の矢印(>>)、dot は塗りつぶした丸(o)
+// 線の端の印。open は V 字の矢印(>)、filled は塗りつぶした三角の矢印(>>)、dot は塗りつぶした丸(o)
 export const HEADS = ["none", "open", "filled", "dot"] as const;
 export type Head = (typeof HEADS)[number];
 
-export type Arrow = { style: LineStyle; start: Head; end: Head };
+// 線の端。id の図形につなぎ、head の印を付ける。into なら線を図形の本体の中まで伸ばす(印が図形に刺さった形)
+export type LineEnd = { id: string; at: SourcePosition; head: Head; into: boolean };
 
-// 線の端の図形。into なら、線をその図形の本体の中まで伸ばす(端の印が図形に刺さった形)
-export type LineEndpoint = { id: string; at: SourcePosition; into: boolean };
-
-// a ---> b "ラベル" into b。start は from の側、end は to の側の端
+// a ---> b "ラベル" into b。from は記号の左、to は右の図形
 export type LineStatement = {
   kind: "line";
-  from: LineEndpoint;
-  to: LineEndpoint;
-  arrow: Arrow;
+  style: LineStyle;
+  from: LineEnd;
+  to: LineEnd;
   label: string | null;
   at: SourcePosition;
   end: SourcePosition;
 };
 
-// 図全体の下に置く文の揃え
-export const CAPTION_ALIGNS = ["left", "center", "right"] as const;
-export type CaptionAlign = (typeof CAPTION_ALIGNS)[number];
+// 図の下の文の揃え
+export const JUSTIFICATIONS = ["left", "center", "right"] as const;
+export type Justify = (typeof JUSTIFICATIONS)[number];
 
 // caption "文" right size small。図全体の下に置く文。null は既定(左詰め、中の大きさ)
 export type CaptionStatement = {
   kind: "caption";
   text: string;
-  align: CaptionAlign | null;
+  justify: Justify | null;
   size: Scale | null;
   at: SourcePosition;
   end: SourcePosition;

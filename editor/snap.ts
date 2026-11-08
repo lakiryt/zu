@@ -1,41 +1,61 @@
 // ドラッグしたときの吸着先を、配置済みの図(Scene)から求める。DOM を知らない
-import { DEFAULT_GAP } from "../src/index.ts";
+import { DEFAULT_GAP, DIRECTIONS } from "../src/index.ts";
 import type { Direction, PlacedShape, Placement, Point } from "../src/index.ts";
+import { NOWHERE } from "./edit.ts";
 
-// 本体の中心から外枠の四辺まで
-function reach({ box, anchor }: PlacedShape) {
-  return {
-    left: anchor.x - box.x,
-    right: box.x + box.width - anchor.x,
-    top: anchor.y - box.y,
-    bottom: box.y + box.height - anchor.y,
-  };
+// 位置が同じとみなす差
+const EXACT = 0.05;
+
+// 向きごとの軸と符号。right と below が正
+const AXIS: Record<Direction, { coord: "x" | "y"; sign: 1 | -1 }> = {
+  left: { coord: "x", sign: -1 },
+  right: { coord: "x", sign: 1 },
+  above: { coord: "y", sign: -1 },
+  below: { coord: "y", sign: 1 },
+};
+
+// 本体の中心から外枠の手前(左か上)と奥(右か下)の端まで
+function reach({ box, anchor }: PlacedShape, coord: "x" | "y") {
+  const start = coord === "x" ? box.x : box.y;
+  const size = coord === "x" ? box.width : box.height;
+  return { before: anchor[coord] - start, after: start + size - anchor[coord] };
+}
+
+// base の direction の向きに、外枠どうしの間を gap 空けて self を置いたときの self の本体の中心
+export function besideAnchor(base: PlacedShape, self: PlacedShape, direction: Direction, gap: number): Point {
+  const { coord, sign } = AXIS[direction];
+  const far = sign > 0 ? reach(base, coord).after : reach(base, coord).before;
+  const near = sign > 0 ? reach(self, coord).before : reach(self, coord).after;
+  return { ...base.anchor, [coord]: base.anchor[coord] + sign * (far + gap + near) };
+}
+
+// self の本体の中心を anchor に置いたとき、base との外枠どうしの間(direction の向き)
+function gapBetween(base: PlacedShape, self: PlacedShape, direction: Direction, anchor: Point) {
+  const { coord, sign } = AXIS[direction];
+  const far = sign > 0 ? reach(base, coord).after : reach(base, coord).before;
+  const near = sign > 0 ? reach(self, coord).before : reach(self, coord).after;
+  return sign * (anchor[coord] - base.anchor[coord]) - far - near;
 }
 
 // 間を書かずに置くときの間。of の図形の direction に置く場合。配置の段の defaultGap と同じにする
 export type GapOf = (of: string, direction: Direction) => number;
 const fixedGap: GapOf = () => DEFAULT_GAP;
 
-// 吸着先。dragged をそこへ置いたときの本体の中心(anchor)を持つ
+// 吸着先。dragged をそこへ置いたときの本体の中心(anchor)を持つ。gap が null なら既定の間
 export type Slot = { direction: Direction; of: string; anchor: Point; gap: number | null };
 
 // 既定の間で、ほかの図形の上下左右に置いたときの位置
 export function slots(shapes: PlacedShape[], dragged: PlacedShape, excluded: Set<string>, gapOf: GapOf = fixedGap): Slot[] {
-  const self = reach(dragged);
-  const result: Slot[] = [];
-  for (const shape of shapes) {
-    if (shape.id === dragged.id || excluded.has(shape.id)) continue;
-    const other = reach(shape);
-    const { x, y } = shape.anchor;
-    const of = shape.id;
-    result.push(
-      { direction: "right", of, gap: null, anchor: { x: x + other.right + gapOf(of, "right") + self.left, y } },
-      { direction: "left", of, gap: null, anchor: { x: x - other.left - gapOf(of, "left") - self.right, y } },
-      { direction: "below", of, gap: null, anchor: { x, y: y + other.bottom + gapOf(of, "below") + self.top } },
-      { direction: "above", of, gap: null, anchor: { x, y: y - other.top - gapOf(of, "above") - self.bottom } },
+  return shapes
+    .filter((shape) => shape.id !== dragged.id && !excluded.has(shape.id))
+    .flatMap((shape) =>
+      DIRECTIONS.map((direction) => ({
+        direction,
+        of: shape.id,
+        gap: null,
+        anchor: besideAnchor(shape, dragged, direction, gapOf(shape.id, direction)),
+      })),
     );
-  }
-  return result;
 }
 
 export function nearest(candidates: Slot[], point: Point, radius: number) {
@@ -51,8 +71,13 @@ export function nearest(candidates: Slot[], point: Point, radius: number) {
   return best;
 }
 
-const NOWHERE = { line: 0, column: 0 };
-const EXACT = 0.05;
+const beside = (direction: Direction, of: string, gap: number | null): Placement => ({
+  kind: "beside",
+  direction,
+  of,
+  gap,
+  at: NOWHERE,
+});
 
 // self の本体の中心を anchor に置く置き方の候補。数の少ないものから並べる。
 // 1. ほかの図形の上下左右に既定の間で置くとぴったり合うもの(数なし)
@@ -64,55 +89,27 @@ export function placementsFor(
   excluded: Set<string>,
   gapOf: GapOf = fixedGap,
 ): Placement[] {
-  const mine = reach(self);
-  const exact: Placement[] = [];
+  const exact = slots(shapes, self, excluded, gapOf)
+    .filter((slot) => Math.abs(slot.anchor.x - anchor.x) < EXACT && Math.abs(slot.anchor.y - anchor.y) < EXACT)
+    .map((slot) => beside(slot.direction, slot.of, null));
+
   const spaced: { placement: Placement; gap: number }[] = [];
   for (const shape of shapes) {
     if (shape.id === self.id || excluded.has(shape.id)) continue;
-    for (const slot of slots([shape], self, new Set(), gapOf)) {
-      if (Math.abs(slot.anchor.x - anchor.x) < EXACT && Math.abs(slot.anchor.y - anchor.y) < EXACT) {
-        exact.push({ kind: "beside", direction: slot.direction, of: shape.id, gap: null, at: NOWHERE });
-      }
-    }
-    const other = reach(shape);
-    const add = (direction: Direction, gap: number) => {
-      if (gap >= 0) spaced.push({ placement: { kind: "beside", direction, of: shape.id, gap: Math.round(gap * 100) / 100, at: NOWHERE }, gap });
-    };
-    if (Math.abs(shape.anchor.y - anchor.y) < EXACT) {
-      if (anchor.x >= shape.anchor.x) add("right", anchor.x - mine.left - (shape.anchor.x + other.right));
-      else add("left", shape.anchor.x - other.left - (anchor.x + mine.right));
-    }
-    if (Math.abs(shape.anchor.x - anchor.x) < EXACT) {
-      if (anchor.y >= shape.anchor.y) add("below", anchor.y - mine.top - (shape.anchor.y + other.bottom));
-      else add("above", shape.anchor.y - other.top - (anchor.y + mine.bottom));
+    const candidates: Direction[] = [];
+    if (Math.abs(shape.anchor.y - anchor.y) < EXACT) candidates.push(anchor.x >= shape.anchor.x ? "right" : "left");
+    if (Math.abs(shape.anchor.x - anchor.x) < EXACT) candidates.push(anchor.y >= shape.anchor.y ? "below" : "above");
+    for (const direction of candidates) {
+      const gap = gapBetween(shape, self, direction, anchor);
+      if (gap >= 0) spaced.push({ placement: beside(direction, shape.id, Math.round(gap * 100) / 100), gap });
     }
   }
   spaced.sort((a, b) => a.gap - b.gap);
   return [...exact, ...spaced.map(({ placement }) => placement)];
 }
 
-// 基準の向きの線の上だけを動かし、間(by)を求める。間は 0 より狭くしない
+// 基準の向きの線の上だけを動かし、間(by)を求める。間は整数にし、0 より狭くしない
 export function slide(dragged: PlacedShape, base: PlacedShape, direction: Direction, point: Point): Slot {
-  const self = reach(dragged);
-  const other = reach(base);
-  const { x, y } = base.anchor;
-  const round = (value: number) => Math.max(0, Math.round(value));
-  switch (direction) {
-    case "right": {
-      const gap = round(point.x - self.left - (x + other.right));
-      return { direction, of: base.id, gap, anchor: { x: x + other.right + gap + self.left, y } };
-    }
-    case "left": {
-      const gap = round(x - other.left - (point.x + self.right));
-      return { direction, of: base.id, gap, anchor: { x: x - other.left - gap - self.right, y } };
-    }
-    case "below": {
-      const gap = round(point.y - self.top - (y + other.bottom));
-      return { direction, of: base.id, gap, anchor: { x, y: y + other.bottom + gap + self.top } };
-    }
-    case "above": {
-      const gap = round(y - other.top - (point.y + self.bottom));
-      return { direction, of: base.id, gap, anchor: { x, y: y - other.top - gap - self.bottom } };
-    }
-  }
+  const gap = Math.max(0, Math.round(gapBetween(base, dragged, direction, point)));
+  return { direction, of: base.id, gap, anchor: besideAnchor(base, dragged, direction, gap) };
 }

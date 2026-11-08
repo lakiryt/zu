@@ -195,9 +195,15 @@ test("lines follow renames and disappear with their shapes", () => {
   const added = edit.addLine(text, "b", "a");
   assert.match(added, /^b --- a$/m);
   const document = parse(added);
-  const changed = edit.replaceLine(added, document, 1, { ...edit.lines(document)[1]!, arrow: { style: "dotted", start: "dot", end: "filled" } });
+  const line = edit.statementsOf(document, "line")[1]!;
+  const changed = edit.replaceNth(added, document, "line", 1, {
+    ...line,
+    style: "dotted",
+    from: { ...line.from, head: "dot" },
+    to: { ...line.to, head: "filled" },
+  });
   assert.match(changed, /^b o-.->> a$/m);
-  assert.equal(edit.lineAtLine(document, 3), 0);
+  assert.equal(edit.indexAtLine(document, "line", 3), 0);
 });
 
 test("snapping beside a shape uses the same widened gap as the layout", () => {
@@ -254,9 +260,10 @@ test("captions are added, changed and removed by their order", () => {
   const text = edit.addCaption("text a\n", "説明");
   assert.match(text, /^caption "説明"$/m);
   const document = parse(text);
-  const changed = edit.replaceCaption(text, document, 0, { ...edit.captions(document)[0]!, align: "center", size: "small" });
+  const caption = edit.statementsOf(document, "caption")[0]!;
+  const changed = edit.replaceNth(text, document, "caption", 0, { ...caption, justify: "center", size: "small" });
   assert.match(changed, /^caption "説明" center size small$/m);
-  assert.doesNotMatch(edit.replaceCaption(text, document, 0, null), /caption/);
+  assert.doesNotMatch(edit.replaceNth(text, document, "caption", 0, null), /caption/);
   // 名前の書き換えは文に触れない
   assert.match(edit.rename(text, document, "a", "b"), /^caption "説明"$/m);
 });

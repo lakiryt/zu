@@ -4,6 +4,16 @@ zu(言語とライブラリ)の版ごとの変更。版の付け方は [docs/des
 
 ## 未公開
 
+### 互換を壊す変更
+
+- `text` に `size` を書くと誤りになった(前は無視していた)。`cube` の `size` に数を2つ書くのも誤り(前は2つ目を無視していた)。消せば前と同じ
+- 構文木を整理した
+  - 線の両端の印を、`LineStatement.arrow` から各端(`from`、`to`)の `head` に移した。線の種類は `LineStatement.style`。端の型は `LineEndpoint` から `LineEnd` に名前を変えた
+  - `ShapeStatement.size` は `{ kind: "scale", scale }` か `{ kind: "numbers", width, height }`。型の名前は `SizeOption` から `Size` に
+  - 図の下の文の揃えは `CaptionStatement.justify`(前は `align`)。`CAPTION_ALIGNS`、`CaptionAlign` は `JUSTIFICATIONS`、`Justify` に
+  - `Arrow` は公開しなくなった
+- 配置: `PlacedLine` の端は `from`、`to`(`{ id, point, head }`、型は `PlacedEnd`)にまとめた(前は `from`、`to` が名前で、`start`、`end`、`arrow` が別にあった)。`PlacedCaption.align` は `justify` に
+
 ## 0.2.0 (2026-11-08)
 
 ### 足したもの

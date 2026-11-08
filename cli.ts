@@ -1,11 +1,11 @@
-// 使い方: node zu/cli.ts <入力.zu> [出力.svg]
+// 使い方: node cli.ts <入力.zu> [出力.svg]
 // 出力を省くと標準出力に書く
 import { readFileSync, writeFileSync } from "node:fs";
 import { ZuError, render } from "./src/index.ts";
 
 const [input, output] = process.argv.slice(2);
 if (!input) {
-  console.error("使い方: node zu/cli.ts <入力.zu> [出力.svg]");
+  console.error("使い方: node cli.ts <入力.zu> [出力.svg]");
   process.exit(2);
 }
 

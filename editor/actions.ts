@@ -6,8 +6,6 @@ import type { Move } from "./relocate.ts";
 import { NOTHING } from "./state.ts";
 import type { Editor } from "./state.ts";
 
-const NOWHERE = { line: 0, column: 0 };
-
 export function addShape(editor: Editor, shape: Shape) {
   const { document } = editor;
   if (!document) return;
@@ -19,8 +17,8 @@ export function addShape(editor: Editor, shape: Shape) {
     label: null,
     placement: null,
     size: null,
-    at: NOWHERE,
-    end: NOWHERE,
+    at: edit.NOWHERE,
+    end: edit.NOWHERE,
   };
   editor.commit(edit.append(editor.text, statement), { kind: "shapes", ids: [id] });
 }
@@ -30,7 +28,7 @@ export function connect(editor: Editor) {
   const { document } = editor;
   const [from, to, ...rest] = editor.selectedShapes;
   if (!document || !from || !to || rest.length > 0) return;
-  const index = edit.lines(document).length;
+  const index = edit.statementsOf(document, "line").length;
   editor.commit(edit.addLine(editor.text, from, to), { kind: "line", index });
 }
 
@@ -45,7 +43,7 @@ export function removeSelected(editor: Editor) {
   const { document, selection } = editor;
   if (!document) return;
   if (selection.kind === "line") {
-    editor.commit(edit.replaceLine(editor.text, document, selection.index, null), NOTHING);
+    editor.commit(edit.replaceNth(editor.text, document, "line", selection.index, null), NOTHING);
   } else if (selection.kind === "shapes") {
     editor.attempt(() => selection.ids.reduce((text, id) => removeShape(text, id), editor.text), NOTHING);
   }

@@ -4,7 +4,7 @@ import type { Document, Placement, PlacedShape, Point, ShapeStatement } from "..
 import { move } from "./actions.ts";
 import { svgElement } from "./dom.ts";
 import * as edit from "./edit.ts";
-import { DIRECTION_NAMES } from "./names.ts";
+import { describeBeside } from "./names.ts";
 import { nearest, slide, slots } from "./snap.ts";
 import type { Slot } from "./snap.ts";
 import { NOTHING } from "./state.ts";
@@ -95,7 +95,13 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
       if (!group) return;
       group.classList.add("line");
       group.insertBefore(
-        svgElement("line", { class: "hit", x1: line.start.x, y1: line.start.y, x2: line.end.x, y2: line.end.y }),
+        svgElement("line", {
+          class: "hit",
+          x1: line.from.point.x,
+          y1: line.from.point.y,
+          x2: line.to.point.x,
+          y2: line.to.point.y,
+        }),
         group.firstChild,
       );
     });
@@ -173,7 +179,7 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
     if (!drag.moved) {
       // 動かす図形に結んだ線は、放すまで薄くする(放すと引き直す)
       scene.lines.forEach((line, index) => {
-        if (drag!.moving.has(line.from) || drag!.moving.has(line.to)) {
+        if (drag!.moving.has(line.from.id) || drag!.moving.has(line.to.id)) {
           root.querySelector(`g[data-line="${index}"]`)?.classList.add("detached");
         }
       });
@@ -224,7 +230,7 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
   function describe(target: Target) {
     if (target.kind === "at") return `座標 (${target.written.x}, ${target.written.y})`;
     const { of, direction, gap } = target.slot;
-    return `${of} の${DIRECTION_NAMES[direction]}${gap === null ? "" : `(間 ${gap})`}`;
+    return describeBeside(of, direction, gap);
   }
 
   function drawGhost(root: SVGSVGElement, current: Drag) {
@@ -246,9 +252,9 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
         );
       }
     }
-    const caption = svgElement("text", { class: "caption", x: x + shape.box.width / 2, y: y - 10 });
-    caption.textContent = describe(target);
-    overlay.appendChild(caption);
+    const hint = svgElement("text", { class: "hint", x: x + shape.box.width / 2, y: y - 10 });
+    hint.textContent = describe(target);
+    overlay.appendChild(hint);
   }
 
   function place(current: Drag, target: Target) {

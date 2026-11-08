@@ -453,7 +453,7 @@ main {
   stroke-dasharray: 2 3;
 }
 
-#stage .caption {
+#stage .hint {
   fill: var(--accent);
   font-size: 13px;
   text-anchor: middle;
