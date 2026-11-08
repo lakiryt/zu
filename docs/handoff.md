@@ -41,6 +41,7 @@ block-beta:
 - `size`(数か `small`/`medium`/`large`。既定の大きさは 2026-11-08 に小さくした)、複数行のラベル(`\n`)、コメント
 - 線: `a ---> b "ラベル"`。実線 `---`、点線 `-.-`、二重線 `===` と、両端の印(`>` V字の矢印、`>>` 塗りつぶした矢印、`o` 丸)を組み合わせる。同じ2つの図形を結ぶ線は平行にずらす(2026-11-07 追加)
 - 線の端を図形の中まで伸ばす `a ---o b into b`(2026-11-08 追加)。同じ図形に刺さる端は互いに離す
+- 線に名前を付け、ほかの線をその線に向ける `b ---> c "詐害行為" as f` と `x ---> f`(2026-11-08 追加)
 - 図全体の下の文 `caption "…"`(2026-11-08 追加)。既定は左詰めで図の中と同じ字の大きさ。`center`/`right`、`size small`/`large` で変える
 
 詳しくは SPEC.md。
@@ -51,7 +52,7 @@ block-beta:
 
 - [design/placement.md](design/placement.md): 数値に頼らない置き方(揃え、並び、間の段階)
 - [design/lines.md](design/lines.md): 線と矢印。決めたことと未決
-- [design/line-targets-and-curves.md](design/line-targets-and-curves.md): 線に向かう線(詐害行為の矢印への取消など)と曲がる線の検討(2026-11-08、未決)
+- [design/line-targets-and-curves.md](design/line-targets-and-curves.md): 線に向かう線(入れた)と曲がる線(TikZ 式の `bend` に決めた)の検討
 - [design/editor.md](design/editor.md): 視覚的なエディタ(`editor/`)。できること、暫定の判断、未決
 - [design/versioning.md](design/versioning.md): 版の付け方と出し方(変更の記録は [CHANGELOG.md](../CHANGELOG.md))
 - [design/brand.md](design/brand.md): 名前(Law図)、ロゴ、検索と共有の情報

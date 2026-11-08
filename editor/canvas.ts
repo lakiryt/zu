@@ -177,9 +177,18 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
     const dy = point.y - drag.start.y;
     if (!drag.moved && Math.hypot(dx, dy) < CLICK_SLOP) return;
     if (!drag.moved) {
-      // 動かす図形に結んだ線は、放すまで薄くする(放すと引き直す)
+      // 動かす図形に結んだ線と、その線に向けた線は、放すまで薄くする(放すと引き直す)
+      const detached = new Set(drag.moving);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const { id, from, to } of scene.lines) {
+          if (id === null || detached.has(id) || !(detached.has(from.id) || detached.has(to.id))) continue;
+          detached.add(id);
+          grew = true;
+        }
+      }
       scene.lines.forEach((line, index) => {
-        if (drag!.moving.has(line.from.id) || drag!.moving.has(line.to.id)) {
+        if (detached.has(line.from.id) || detached.has(line.to.id)) {
           root.querySelector(`g[data-line="${index}"]`)?.classList.add("detached");
         }
       });

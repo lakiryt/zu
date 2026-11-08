@@ -53,16 +53,19 @@ export type LineStyle = (typeof LINE_STYLES)[number];
 export const HEADS = ["none", "open", "filled", "dot"] as const;
 export type Head = (typeof HEADS)[number];
 
-// 線の端。id の図形につなぎ、head の印を付ける。into なら線を図形の本体の中まで伸ばす(印が図形に刺さった形)
+// 線の端。id の図形か線につなぎ、head の印を付ける。
+// into なら線を図形の本体の中まで伸ばす(印が図形に刺さった形。線には使えない)
 export type LineEnd = { id: string; at: SourcePosition; head: Head; into: boolean };
 
-// a ---> b "ラベル" into b。from は記号の左、to は右の図形
+// a ---> b "ラベル" as f into b。from は記号の左、to は右の図形(か線)。
+// id は線の名前(as で付ける。なければ null)。名前を付けた線には、ほかの線を向けられる
 export type LineStatement = {
   kind: "line";
   style: LineStyle;
   from: LineEnd;
   to: LineEnd;
   label: string | null;
+  id: string | null;
   at: SourcePosition;
   end: SourcePosition;
 };

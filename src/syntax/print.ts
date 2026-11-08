@@ -33,6 +33,7 @@ export function print(statement: Statement) {
       const { style, from, to, label } = statement;
       parts.push(from.id, writeArrow({ style, start: from.head, end: to.head }), to.id);
       if (label !== null) parts.push(quote(label));
+      if (statement.id !== null) parts.push("as", statement.id);
       const into = [from, to].filter((end) => end.into).map((end) => end.id);
       if (into.length > 0) parts.push("into", ...into);
       break;

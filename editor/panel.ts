@@ -2,7 +2,7 @@
 import { HEADS, JUSTIFICATIONS, LINE_STYLES, SCALES, SHAPES } from "../src/index.ts";
 import type { CaptionStatement, Document, LineStatement, Scale, Shape, ShapeStatement, Size } from "../src/index.ts";
 import { openAbout } from "./about.ts";
-import { align, removeSelected, setPlacement } from "./actions.ts";
+import { align, pointAtLine, removeSelected, setPlacement } from "./actions.ts";
 import { button, checkbox, choice, html, numberField } from "./dom.ts";
 import * as edit from "./edit.ts";
 import { HEAD_NAMES, JUSTIFY_NAMES, SCALE_NAMES, SHAPE_NAMES, STYLE_NAMES, describeBeside } from "./names.ts";
@@ -17,6 +17,7 @@ const HELP = [
   "Shift+クリック: いくつも選ぶ。まとめてドラッグすると、互いの位置を保って動く",
   "Alt+ドラッグ: 数で置く(間や座標)",
   "2つ選んで「線でつなぐ」: 線を引く。線をクリックすると種類や矢印を変えられる",
+  "線を選んで「この線へ矢印を引く」: 図形から線へ矢印を引く",
 ];
 
 // 数で書いた大きさは、語の選択肢に加えてこれを出す(変えるのは「高度な設定」で)
@@ -143,7 +144,7 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
       html(
         "div",
         { class: "field" },
-        html("span", {}, "結ぶ図形"),
+        html("span", {}, "結ぶもの"),
         html("span", { class: "value" }, `${from.id} → ${to.id}`),
         button("向きを入れ替える", reverse, { class: "small" }),
       ),
@@ -155,8 +156,13 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
         choice(`${end.id} の側の端`, HEADS, HEAD_NAMES, end.head, (head) =>
           change({ ...statement, [side]: { ...end, head } }),
         ),
-        checkbox("図形の中まで伸ばす", end.into, (into) => change({ ...statement, [side]: { ...end, into } })),
       );
+      // 中まで伸ばせるのは図形の側だけ
+      if (edit.findShape(document, end.id)) {
+        panel.append(
+          checkbox("図形の中まで伸ばす", end.into, (into) => change({ ...statement, [side]: { ...end, into } })),
+        );
+      }
     }
     panel.append(
       html(
@@ -165,8 +171,42 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
         "ラベル",
         textArea(statement.label ?? "", 2, (label) => change({ ...statement, label: label === "" ? null : label }), "なし"),
       ),
-      html("div", { class: "row" }, button("この線を消す", () => change(null), { class: "danger" })),
+      lineName(document, statement, change),
+      pointAtField(document),
+      html("div", { class: "row" }, button("この線を消す", () => removeSelected(editor), { class: "danger" })),
     );
+  }
+
+  // 線の名前(as)。ほかの線から指すときに要る。空にすると名前を外す(指されている間は外せない)
+  function lineName(document: Document, statement: LineStatement, change: (next: LineStatement) => void) {
+    const input = html("input", { value: statement.id ?? "", placeholder: "なし" }) as HTMLInputElement;
+    input.addEventListener("change", () => {
+      const next = input.value.trim();
+      if (next === (statement.id ?? "")) return;
+      if (next === "") {
+        if (edit.isPointedAt(document, statement.id!)) {
+          input.value = statement.id!;
+          return editor.say(`「${statement.id}」に向けた線があるので、名前は外せません`);
+        }
+        return change({ ...statement, id: null });
+      }
+      if (!WORD.test(next)) return editor.say("名前には文字、数字、_、- が使えます(先頭は文字か _)");
+      if (edit.names(document).has(next)) return editor.say(`「${next}」という名前がすでにあります`);
+      if (statement.id === null) return change({ ...statement, id: next });
+      editor.commit(edit.rename(editor.text, document, statement.id, next), editor.selection);
+    });
+    return html("label", { class: "field" }, "名前(ほかの線から指すとき)", input);
+  }
+
+  // 図形を選ぶと、その図形からこの線へ矢印を引く
+  function pointAtField(document: Document) {
+    const select = html("select") as HTMLSelectElement;
+    select.append(html("option", { value: "" }, "図形を選ぶ"));
+    for (const { id } of edit.shapes(document)) select.append(html("option", { value: id }, id));
+    select.addEventListener("change", () => {
+      if (select.value !== "") pointAtLine(editor, select.value);
+    });
+    return html("label", { class: "field" }, "この線へ矢印を引く", select);
   }
 
   function shapeFields(document: Document, id: string) {
@@ -180,7 +220,7 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
       const next = name.value.trim();
       if (next === statement.id) return;
       if (!WORD.test(next)) return editor.say("名前には文字、数字、_、- が使えます(先頭は文字か _)");
-      if (edit.findShape(document, next)) return editor.say(`「${next}」という名前の図形がすでにあります`);
+      if (edit.names(document).has(next)) return editor.say(`「${next}」という名前がすでにあります`);
       editor.commit(edit.rename(editor.text, document, statement.id, next), { kind: "shapes", ids: [next] });
     });
 

@@ -1,0 +1,10 @@
+%% 詐害行為取消: 債権者が、債務者から受益者への譲渡に取消の矢印を向ける
+text b "債務者(B)"
+text c "受益者(C)" right of b by 200
+text x "債権者(X)" above b by 80
+
+b ---> c "譲渡(詐害行為)" as transfer
+x ---> b "債権"
+x ---> transfer "424条 取消"
+
+caption "X は B に対する債権を守るため、B から C への譲渡の取消しを求める。"

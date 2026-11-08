@@ -19,17 +19,24 @@ export function labelSize(label: string) {
 // side はラベルを線の脇に置くとき先に試す向き(線の左が 1、右が -1)
 export type LabelRequest = { start: Point; end: Point; label: string | null; side: number };
 
-// 書いた順に決める。どこも重なるなら、重なりのいちばん少ない場所にする
-export function placeLabels(requests: LabelRequest[], obstacles: Box[]): (Box | null)[] {
+// 書いた順に決める。どこも重なるなら、重なりのいちばん少ない場所にする。
+// lines は先に置いた線(requests の線とは別に、横切らないよう避ける)
+export function placeLabels(
+  requests: LabelRequest[],
+  obstacles: Box[],
+  lines: { start: Point; end: Point }[] = [],
+): (Box | null)[] {
   const placed: Box[] = [];
   return requests.map((request, index) => {
     if (request.label === null) return null;
     const cost = (box: Box) => {
       let total = 0;
       for (const other of [...placed, ...obstacles]) total += overlapArea(box, other);
+      const near = grow(box, LABEL.aside + 1);
       requests.forEach((other, otherIndex) => {
-        if (otherIndex !== index && crosses(other.start, other.end, grow(box, LABEL.aside + 1))) total += CROSSING;
+        if (otherIndex !== index && crosses(other.start, other.end, near)) total += CROSSING;
       });
+      for (const other of lines) if (crosses(other.start, other.end, near)) total += CROSSING;
       return total;
     };
     let best: Box | null = null;

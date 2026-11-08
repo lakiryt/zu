@@ -152,6 +152,7 @@ test("a line statement holds both ends, the arrow and the label", () => {
     from: { id: "a", at: { line: 1, column: 1 }, head: "filled", into: false },
     to: { id: "b", at: { line: 1, column: 11 }, head: "filled", into: false },
     label: "代理権の授与",
+    id: null,
     at: { line: 1, column: 1 },
     end: { line: 1, column: 21 },
   });
@@ -175,6 +176,15 @@ test("into names the ends drawn into their shapes", () => {
   assertError("a --- b into", 1, 13, /中まで伸ばす図形の名前が必要です/);
 });
 
+test("as names a line, written before into", () => {
+  const [line] = parse('b ---> c "詐害行為" as f into c').statements;
+  assert.ok(line?.kind === "line" && line.id === "f" && line.to.into);
+  const [plain] = parse("b ---> c").statements;
+  assert.ok(plain?.kind === "line" && plain.id === null);
+  assertError("b ---> c as", 1, 12, /線の名前が必要です/);
+  assertError("b ---> c into c as f", 1, 17, /as\(線の名前\)は into より前に書きます/);
+});
+
 test("size fits the shape: none for text, one number for a cube", () => {
   assertError("text a size 10", 1, 8, /text には size を書けません/);
   assertError("cube a size 40 50", 1, 13, /cube の size は一辺を1つだけ書きます/);
@@ -189,7 +199,7 @@ test("size takes a word as well as numbers", () => {
 });
 
 test("printing a line gives back the same line", () => {
-  for (const source of ['a -.->> b "x\\ny"', "a o=== b", "a <--- b", "a --- b", 'a ---o b "x" into b', "a o---o b into a b"]) {
+  for (const source of ['a -.->> b "x\\ny"', "a o=== b", "a <--- b", "a --- b", 'a ---o b "x" into b', "a o---o b into a b", 'b ---> c "x" as f into c', "x ---> f"]) {
     const [statement] = parse(source).statements;
     assert.equal(print(statement!), source);
   }

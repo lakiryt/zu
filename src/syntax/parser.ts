@@ -73,7 +73,8 @@ export function parse(source: string): Document {
     return shape(head, head.value);
   }
 
-  // a ---> b "ラベル" into b: 2つの図形を線で結ぶ。into に挙げた図形には、線を中まで伸ばす
+  // a ---> b "ラベル" as f into b: 2つの図形(か線)を線で結ぶ。as で線に名前を付け、
+  // into に挙げた図形には線を中まで伸ばす
   function line(head: Token): LineStatement {
     const { style, start, end } = readArrow(next().value)!;
     const to = expect("word", "結ぶ先の図形の名前");
@@ -82,16 +83,24 @@ export function parse(source: string): Document {
       { id: head.value, at: head.at, head: start, into: false },
       { id: to.value, at: to.at, head: end, into: false },
     ];
+    let id: string | null = null;
+    if (peekWord("as")) {
+      next();
+      id = expect("word", "線の名前").value;
+    }
     if (!atLineEnd()) {
       if (!peekWord("into")) {
         throw new ZuError(
-          `線の文には${describe(peek())}を書けません(ラベルは "…"、中まで伸ばすのは into で書きます)`,
+          `線の文には${describe(peek())}を書けません(ラベルは "…"、名前は as、中まで伸ばすのは into で書きます)`,
           peek().at,
         );
       }
       next();
       do {
         const target = expect("word", "中まで伸ばす図形の名前");
+        if (target.value === "as" && !ends.some((end) => end.id === "as")) {
+          throw new ZuError("as(線の名前)は into より前に書きます", target.at);
+        }
         // 同じ図形どうしを結んだ線(配置の段で誤りにする)でも、まだ into でない側を選ぶ
         const end = ends.find((end) => end.id === target.value && !end.into);
         if (!end) {
@@ -105,7 +114,7 @@ export function parse(source: string): Document {
       } while (!atLineEnd());
     }
     const [from, toEnd] = ends;
-    return { kind: "line", style, from, to: toEnd, label, at: head.at, end: last().end };
+    return { kind: "line", style, from, to: toEnd, label, id, at: head.at, end: last().end };
   }
 
   // align row a b c: 挙げた図形を同じ段(column なら同じ列)に揃える

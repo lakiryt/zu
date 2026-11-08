@@ -192,10 +192,12 @@ function pinDown(
   // 消す図形。その図形に結んだ線も消す
   removed: string | null = null,
 ) {
+  // 消す図形に結んだ線と、その線に向けた線も消す
+  const doomed = removed === null ? new Set() : edit.attachedLines(document, [removed]);
   return edit.rewrite(text, document, (statement) => {
     if (statement.kind === "caption") return undefined;
     if (statement.kind === "align") return changes.has(statement) ? changes.get(statement) : undefined;
-    if (statement.kind === "line") return statement.from.id === removed || statement.to.id === removed ? null : undefined;
+    if (statement.kind === "line") return doomed.has(statement) ? null : undefined;
     const overridden = override(statement);
     if (overridden !== undefined) return overridden;
     if (loose.includes(statement.id)) return { ...statement, placement: atPoint(desired.get(statement.id)!, origin) };

@@ -267,3 +267,28 @@ test("captions are added, changed and removed by their order", () => {
   // 名前の書き換えは文に触れない
   assert.match(edit.rename(text, document, "a", "b"), /^caption "説明"$/m);
 });
+
+test("an arrow is drawn from a shape to a line, naming the line if it has no name", () => {
+  const text = "text b\ntext c right of b\ntext x above b\nb ---> c\n";
+  const pointed = edit.pointAtLine(text, parse(text), "x", 0);
+  assert.equal(pointed, "text b\ntext c right of b\ntext x above b\nb ---> c as 線1\nx ---> 線1\n");
+  // 名前があればそのまま使う
+  const named = "text b\ntext c\ntext x\nb --- c as f\n";
+  assert.match(edit.pointAtLine(named, parse(named), "x", 0), /^x ---> f$/m);
+  // 図形と線の名前は同じ空間で、新しい名前はどちらとも重ならない
+  assert.equal(edit.freshId(parse("text 線1\ntext a\ntext b\na --- b as 線2\n"), "線"), "線3");
+});
+
+test("removing a line or a shape also removes the lines pointed at it", () => {
+  const text = "text b\ntext c\ntext x\ntext y\nb --- c as f\nx ---> f as g\ny ---> g\nx --- y\n";
+  assert.equal(edit.removeLine(text, parse(text), 0), "text b\ntext c\ntext x\ntext y\nx --- y\n");
+  const withoutB = removeShape(text, "b");
+  assert.doesNotMatch(withoutB, /--->/);
+  assert.match(withoutB, /^x --- y$/m);
+});
+
+test("renaming a line updates the lines pointed at it", () => {
+  const text = "text b\ntext c\ntext x\nb --- c as f\nx ---> f\n";
+  assert.equal(edit.rename(text, parse(text), "f", "詐害"), "text b\ntext c\ntext x\nb --- c as 詐害\nx ---> 詐害\n");
+  assert.ok(edit.isPointedAt(parse(text), "f"));
+});

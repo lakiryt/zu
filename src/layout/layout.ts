@@ -1,6 +1,6 @@
 // 配置の段の入口。構文木から図形の外枠と線を決め、全体を余白の内側へ寄せる。SVG は知らない
 import { ZuError } from "../errors.ts";
-import type { Document, ShapeStatement } from "../syntax/ast.ts";
+import type { Document, ShapeStatement, SourcePosition } from "../syntax/ast.ts";
 import { placeCaptions } from "./captions.ts";
 import type { PlacedCaption } from "./captions.ts";
 import { union } from "./geometry.ts";
@@ -35,7 +35,7 @@ export const PADDING = 20;
 
 export function layout(document: Document): Scene {
   const statements = document.statements.filter((statement) => statement.kind === "shape");
-  const byId = indexShapes(statements);
+  const byId = indexShapes(document, statements);
 
   const sizes = new Map(statements.map((statement) => [statement.id, sizeOf(statement)]));
   const anchors = solvePositions(document, statements, byId, sizes);
@@ -86,8 +86,8 @@ export function layout(document: Document): Scene {
   };
 }
 
-// 名前で引けるようにする。名前の重なりと、置き方の参照先がないものは誤り
-function indexShapes(statements: ShapeStatement[]) {
+// 名前で引けるようにする。名前の重なりと、置き方や揃えの参照先がない(か線である)ものは誤り
+function indexShapes(document: Document, statements: ShapeStatement[]) {
   const byId = new Map<string, ShapeStatement>();
   for (const statement of statements) {
     if (byId.has(statement.id)) {
@@ -95,10 +95,17 @@ function indexShapes(statements: ShapeStatement[]) {
     }
     byId.set(statement.id, statement);
   }
+  const lines = new Set(document.statements.flatMap((statement) => (statement.kind === "line" && statement.id !== null ? [statement.id] : [])));
+  const refer = (id: string, at: SourcePosition, use: string) => {
+    if (byId.has(id)) return;
+    if (lines.has(id)) throw new ZuError(`「${id}」は線です(${use}には図形を書きます)`, at);
+    throw new ZuError(`「${id}」という図形はありません`, at);
+  };
   for (const { placement } of statements) {
-    if (placement?.kind === "beside" && !byId.has(placement.of)) {
-      throw new ZuError(`「${placement.of}」という図形はありません`, placement.at);
-    }
+    if (placement?.kind === "beside") refer(placement.of, placement.at, "置き方の基準");
+  }
+  for (const statement of document.statements) {
+    if (statement.kind === "align") for (const { id, at } of statement.members) refer(id, at, "揃え");
   }
   return byId;
 }

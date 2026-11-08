@@ -32,6 +32,14 @@ export function connect(editor: Editor) {
   editor.commit(edit.addLine(editor.text, from, to), { kind: "line", index });
 }
 
+// 図形 from から、選んでいる線へ矢印を引き、引いた線を選ぶ
+export function pointAtLine(editor: Editor, from: string) {
+  const { document, selection } = editor;
+  if (!document || selection.kind !== "line") return;
+  const index = edit.statementsOf(document, "line").length;
+  editor.commit(edit.pointAtLine(editor.text, document, from, selection.index), { kind: "line", index });
+}
+
 export function align(editor: Editor, axis: Axis) {
   const { document } = editor;
   if (!document || editor.selectedShapes.length < 2) return;
@@ -43,7 +51,7 @@ export function removeSelected(editor: Editor) {
   const { document, selection } = editor;
   if (!document) return;
   if (selection.kind === "line") {
-    editor.commit(edit.replaceNth(editor.text, document, "line", selection.index, null), NOTHING);
+    editor.commit(edit.removeLine(editor.text, document, selection.index), NOTHING);
   } else if (selection.kind === "shapes") {
     editor.attempt(() => selection.ids.reduce((text, id) => removeShape(text, id), editor.text), NOTHING);
   }
