@@ -6,6 +6,7 @@ import { relocate, removeShape } from "../editor/relocate.ts";
 import { Editor } from "../editor/state.ts";
 import { nearest, placementsFor, slide, slots } from "../editor/snap.ts";
 import { DEFAULT_GAP, defaultGap, layout } from "../src/layout/layout.ts";
+import { pointAt } from "../src/layout/geometry.ts";
 import { parse } from "../src/syntax/parser.ts";
 import { print } from "../src/syntax/print.ts";
 
@@ -300,7 +301,10 @@ test("reversing a line swaps what it joins and the side it bends to, keeping hea
   const reversed = edit.reverseLine(line);
   assert.equal(print(reversed), "b ---o a bend right large into a");
   // 入れ替えても弧は同じ側にふくらむ
-  const control = (source: string) => layout(parse(`text a\ntext b right of a by 200\n${source}`)).lines[0]!.control!;
+  const control = (source: string) => {
+    const { from, to, controls } = layout(parse(`text a\ntext b right of a by 200\n${source}`)).lines[0]!;
+    return pointAt({ start: from.point, controls, end: to.point }, 0.5);
+  };
   const [plain] = parse("a ---> b bend left").statements;
   assert.ok(plain?.kind === "line");
   const before = control("a ---> b bend left");

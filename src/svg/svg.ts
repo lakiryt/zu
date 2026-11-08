@@ -121,12 +121,12 @@ function drawHead(kind: Head, tip: Point, u: Point, scale: number, spread: numbe
 }
 
 function drawLine(line: PlacedLine) {
-  const { style, from, to, control, label, labelBox } = line;
+  const { style, from, to, controls, label, labelBox } = line;
   const parts: string[] = [];
   const start = from.point;
   const end = to.point;
-  if (control && distance(start, end) > 0) {
-    parts.push(drawCurve(line, { start, control, end }));
+  if (controls && distance(start, end) > 0) {
+    parts.push(drawCurve(line, { start, controls, end }));
   } else if (distance(start, end) > 0) {
     const u = direction(start, end);
     const scale = headScale(style);
@@ -172,8 +172,9 @@ function drawCurve({ style, from, to }: PlacedLine, path: Path) {
   const offsets = style === "double" ? [DOUBLE_GAP / 2, -DOUBLE_GAP / 2] : [0];
   const cap = style === "double" ? "butt" : "round";
   const curves = offsets.map((offset) => {
-    const { start, control, end } = offsetPath(body, offset);
-    const d = `M${round(start.x)},${round(start.y)} Q${round(control!.x)},${round(control!.y)} ${round(end.x)},${round(end.y)}`;
+    const { start, controls, end } = offsetPath(body, offset);
+    const [c1, c2] = controls!;
+    const d = `M${round(start.x)},${round(start.y)} C${round(c1.x)},${round(c1.y)} ${round(c2.x)},${round(c2.y)} ${round(end.x)},${round(end.y)}`;
     return `<path d="${d}" fill="none" stroke="${STROKE}" stroke-width="${STROKE_WIDTH[style]}"${dash} stroke-linecap="${cap}"/>`;
   });
   return [...curves, startHead.svg, endHead.svg].join("");

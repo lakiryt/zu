@@ -90,14 +90,17 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
       }
     }
     // 線は細いので、つかみやすいよう太い透明の線を重ねる。曲げた線には同じ弧を重ねる
-    scene.lines.forEach(({ from, to, control }, index) => {
+    scene.lines.forEach(({ from, to, controls }, index) => {
       const group = root.querySelector(`g[data-line="${index}"]`);
       if (!group) return;
       group.classList.add("line");
       const { x: x1, y: y1 } = from.point;
       const { x: x2, y: y2 } = to.point;
-      const hit = control
-        ? svgElement("path", { class: "hit", d: `M${x1},${y1} Q${control.x},${control.y} ${x2},${y2}` })
+      const hit = controls
+        ? svgElement("path", {
+            class: "hit",
+            d: `M${x1},${y1} C${controls[0].x},${controls[0].y} ${controls[1].x},${controls[1].y} ${x2},${y2}`,
+          })
         : svgElement("line", { class: "hit", x1, y1, x2, y2 });
       group.insertBefore(hit, group.firstChild);
     });
