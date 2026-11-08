@@ -152,6 +152,7 @@ test("a line statement holds both ends, the arrow and the label", () => {
     from: { id: "a", at: { line: 1, column: 1 }, head: "filled", into: false },
     to: { id: "b", at: { line: 1, column: 11 }, head: "filled", into: false },
     label: "代理権の授与",
+    labelOn: false,
     id: null,
     bend: null,
     at: { line: 1, column: 1 },
@@ -184,6 +185,15 @@ test("as names a line, written before into", () => {
   assert.ok(plain?.kind === "line" && plain.id === null);
   assertError("b ---> c as", 1, 12, /線の名前が必要です/);
   assertError("b ---> c into c as f", 1, 17, /as は into より前に書きます/);
+});
+
+test("on puts the label onto the line, written right after the label", () => {
+  const [line] = parse('a ---> b "x" on as f').statements;
+  assert.ok(line?.kind === "line" && line.labelOn && line.id === "f");
+  assert.equal(print(line), 'a ---> b "x" on as f');
+  assertError("a ---> b on", 1, 10, /on はラベル\("…"\)の後に書きます/);
+  // on という名前の図形も結べる
+  assert.ok(parse('a ---> on "x"').statements[0]?.kind === "line");
 });
 
 test("bend curves a line to the left or right of its way, with an optional size", () => {

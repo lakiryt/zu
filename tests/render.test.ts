@@ -318,7 +318,7 @@ test("a cube or parallelogram without a label draws none, and a cube shrinks to 
 });
 
 test("a line pointed at a named line stops at its label when the label sits on it", () => {
-  const scene = layout(parse('text b\ntext c right of b by 200\ntext x above b\nb ---> c "詐害行為" as f\nx ---> f "取消"'));
+  const scene = layout(parse('text b\ntext c right of b by 200\ntext x above b\nb ---> c "詐害行為" on as f\nx ---> f "取消"'));
   const [f, onto] = scene.lines;
   assert.equal(f!.id, "f");
   assert.equal(onto!.to.id, "f");
@@ -326,6 +326,22 @@ test("a line pointed at a named line stops at its label when the label sits on i
   // x は左上から来るので、下地の上の縁の 1 手前で止まる
   assert.ok(onto!.to.point.x > label.x && onto!.to.point.x < label.x + label.width);
   close(onto!.to.point.y, label.y - 1);
+});
+
+test("a label sits beside its line by default: above a level line, right of an upright one, away from later lines", () => {
+  const level = layout(parse('text a\ntext b right of a by 200\na ---> b "α"')).lines[0]!;
+  const box = level.labelBox!;
+  assert.ok(box.y + box.height < level.from.point.y, "横向きの線のラベルは上");
+  close(box.x + box.width / 2, (level.from.point.x + level.to.point.x) / 2);
+  const upright = layout(parse('text a\ntext b below a by 120\nb ---> a "α"')).lines[0]!;
+  assert.ok(upright.labelBox!.x > upright.from.point.x, "縦向きの線のラベルは右");
+  // 後から上へ曲げて向けた線があれば、ラベルは下へ
+  const scene = layout(parse('text a\ntext b right of a by 200\na ---> b "α" as f\nb ---> f bend right large'));
+  const [f] = scene.lines;
+  assert.ok(f!.labelBox!.y > f!.from.point.y, "曲げた線を避けて下");
+  // on なら線に重ねる
+  const on = layout(parse('text a\ntext b right of a by 200\na ---> b "α" on')).lines[0]!;
+  close(on.labelBox!.y + on.labelBox!.height / 2, on.from.point.y);
 });
 
 test("a line pointed at an unlabelled line touches its middle, and ends on one line are spread apart", () => {
@@ -377,7 +393,7 @@ test("bend left bulges to the left of the way, as seen walking from one end to t
 
 test("a bent line keeps its label on the bulge, is not shifted aside, and is drawn as a curve", () => {
   // 大きな立方体なら、2本の端は離れているので、端を離す決まりは働かない
-  const scene = layout(parse('cube a size large\ncube c right of a by 200 size large\na ---> c\na ---> c "上" bend left large'));
+  const scene = layout(parse('cube a size large\ncube c right of a by 200 size large\na ---> c\na ---> c "上" on bend left large'));
   const [straight, bent] = scene.lines;
   // まっすぐな線は1本だけなので、ずらさない
   close(straight!.from.point.y, scene.shapes[0]!.anchor.y);

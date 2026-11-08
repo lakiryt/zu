@@ -86,12 +86,18 @@ export function parse(source: string): Document {
     return shape(head, head.value);
   }
 
-  // a ---> b "ラベル" as f bend left into b: 2つの図形(か線)を線で結ぶ。as で線に名前を付け、
-  // bend で曲げ、into に挙げた図形には線を中まで伸ばす
+  // a ---> b "ラベル" on as f bend left into b: 2つの図形(か線)を線で結ぶ。on でラベルを線に重ね、
+  // as で線に名前を付け、bend で曲げ、into に挙げた図形には線を中まで伸ばす
   function line(head: Token): LineStatement {
     const { style, start, end } = readArrow(next().value)!;
     const to = expect("word", "結ぶ先の図形の名前");
     const label = peek().type === "string" ? next().value : null;
+    let labelOn = false;
+    if (peekWord("on")) {
+      if (label === null) throw new ZuError("on はラベル(\"…\")の後に書きます", peek().at);
+      next();
+      labelOn = true;
+    }
     const ends: [LineEnd, LineEnd] = [
       { id: head.value, at: head.at, head: start, into: false },
       { id: to.value, at: to.at, head: end, into: false },
@@ -117,7 +123,7 @@ export function parse(source: string): Document {
     if (!atLineEnd()) {
       if (!peekWord("into")) {
         throw new ZuError(
-          `線の文には${describe(peek())}を書けません(ラベルは "…"、名前は as、曲げ方は bend、中まで伸ばすのは into で書きます)`,
+          `線の文には${describe(peek())}を書けません(ラベルは "…"、ラベルを線に重ねるのは on、名前は as、曲げ方は bend、中まで伸ばすのは into で書きます)`,
           peek().at,
         );
       }
@@ -140,7 +146,7 @@ export function parse(source: string): Document {
       } while (!atLineEnd());
     }
     const [from, toEnd] = ends;
-    return { kind: "line", style, from, to: toEnd, label, id, bend, at: head.at, end: last().end };
+    return { kind: "line", style, from, to: toEnd, label, labelOn, id, bend, at: head.at, end: last().end };
   }
 
   // a says "売ります" above right: 図形 a に紐づく注釈。置き場所は上下と左右の語で書く(書かなければ自動)

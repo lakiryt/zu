@@ -245,6 +245,7 @@ export function connect(text: string, document: Document, from: Pick, to: Pick) 
     from: lineEnd(a),
     to: lineEnd(b, to.kind === "line" ? "open" : "none"),
     label: null,
+    labelOn: false,
     id: null,
     bend: null,
     at: NOWHERE,

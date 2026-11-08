@@ -66,13 +66,14 @@ export type Bend = { side: BendSide; scale: Scale | null };
 
 // a ---> b "ラベル" as f bend left into b。from は記号の左、to は右の図形(か線)。
 // id は線の名前(as で付ける。なければ null)。名前を付けた線には、ほかの線を向けられる。
-// bend は曲げ方(null ならまっすぐ)
+// bend は曲げ方(null ならまっすぐ)。labelOn はラベルを線に重ねるか(on。既定は線の脇)
 export type LineStatement = {
   kind: "line";
   style: LineStyle;
   from: LineEnd;
   to: LineEnd;
   label: string | null;
+  labelOn: boolean;
   id: string | null;
   bend: Bend | null;
   at: SourcePosition;

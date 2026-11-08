@@ -32,7 +32,7 @@ export function print(statement: Statement) {
     case "line": {
       const { style, from, to, label } = statement;
       parts.push(from.id, writeArrow({ style, start: from.head, end: to.head }), to.id);
-      if (label !== null) parts.push(quote(label));
+      if (label !== null) parts.push(quote(label), ...(statement.labelOn ? ["on"] : []));
       if (statement.id !== null) parts.push("as", statement.id);
       if (statement.bend) parts.push("bend", statement.bend.side, ...(statement.bend.scale ? [statement.bend.scale] : []));
       const into = [from, to].filter((end) => end.into).map((end) => end.id);

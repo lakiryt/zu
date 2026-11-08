@@ -213,8 +213,17 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
         "label",
         { class: "field" },
         "ラベル",
-        textArea(statement.label ?? "", 2, (label) => change({ ...statement, label: label === "" ? null : label }), "なし"),
+        textArea(
+          statement.label ?? "",
+          2,
+          (label) => change(label === "" ? { ...statement, label: null, labelOn: false } : { ...statement, label }),
+          "なし",
+        ),
       ),
+      // ラベルは既定で線の脇に置く。重ねると、線を切ってその上に書く
+      ...(statement.label === null
+        ? []
+        : [checkbox("ラベルを線に重ねる", statement.labelOn, (labelOn) => change({ ...statement, labelOn }))]),
       lineName(document, statement, change),
       pointAtField(document),
       html("div", { class: "row" }, button("この線を消す", () => removeSelected(editor), { class: "danger" })),

@@ -5,6 +5,7 @@ import { along, clip, contains, direction, distance, grow, pointAt, subPath, tan
 import type { Box, Path, Point } from "./geometry.ts";
 import { aimInside, arrangeOnRing, spreadOnRing, spreadTips, tipInside } from "./into.ts";
 import { LABEL, crosses, labelSize, placeLabels } from "./labels.ts";
+import type { LabelRequest } from "./labels.ts";
 
 // 線の端。id はつないだ図形か線。point は線の端の位置(図形の本体の手前か、中まで伸ばした所)
 export type PlacedEnd = { id: string; point: Point; head: Head };
@@ -33,6 +34,8 @@ export type ShapeFrame = { id: string; anchor: Point; body: Box; inner: Box; box
 const LINE = { margin: 6, spacing: 16, clearance: 10, apart: 14, approach: 30, focus: 40 };
 // 線に向けた線の端と、向けた先のラベルの下地や線との間(二重線は2本の外側で止める)。
 // 同じ線に当てる端どうしの間隔。shallow は、線に浅く当たるときに止める長さを抑える角度の正弦
+// 縦向きとみなす線の傾き(向きの横の成分がこれより小さい)
+const UPRIGHT = 0.3;
 const ONTO = { label: 1, line: 1.5, double: 3, spacing: 12, shallow: 0.3 };
 
 // 線を向ける先。図形か、名前を付けた線。線なら anchor は当てる点、body は当てる枠(ラベルの下地か、大きさのない点)。
@@ -124,6 +127,8 @@ export function placeLines(statements: LineStatement[], shapes: Map<string, Shap
   // ラベルが避けるもの。図形、矢先、先に置いたラベルと線
   const obstacles = [...shapes.values()].map(({ box }) => box);
   const earlier: Path[] = [];
+  // 線の脇に置くラベルは、すべての線を置いてから決める(後から来る線も避ける)
+  const aside: LabelRequest[] = [];
 
   let waiting = statements.map((statement, index) => ({ statement, index }));
   while (waiting.length > 0) {
@@ -140,13 +145,19 @@ export function placeLines(statements: LineStatement[], shapes: Map<string, Shap
     if (separateEnds(drafts, segments)) segments = drafts.map(cut);
 
     obstacles.push(...segments.flatMap(headBoxes));
+    // 線に重ねるラベルは、この線に向ける線の止まる所を決めるので、先に置く
     const labelBoxes = placeLabels(
-      segments.map(({ statement, path, side }) => ({ path, label: statement.label, side })),
+      segments.map(({ statement, path, side }) => ({
+        path,
+        label: statement.labelOn ? statement.label : null,
+        side,
+        on: true,
+      })),
       obstacles,
       earlier,
     );
 
-    segments.forEach(({ statement, path }, index) => {
+    segments.forEach(({ statement, path, side }, index) => {
       const line: PlacedLine = {
         id: statement.id,
         style: statement.style,
@@ -158,12 +169,16 @@ export function placeLines(statements: LineStatement[], shapes: Map<string, Shap
         over: statement.from.into || statement.to.into,
       };
       result[ready[index]!.index] = line;
+      aside[ready[index]!.index] = { path, label: statement.labelOn ? null : statement.label, side, on: false };
       earlier.push(path);
       if (line.labelBox) obstacles.push(line.labelBox);
       if (line.id !== null) targets.set(line.id, lineTarget(line.id, line));
     });
     waiting = waiting.filter((entry) => !ready.includes(entry));
   }
+  placeLabels(aside, obstacles).forEach((box, index) => {
+    if (box) result[index]!.labelBox = box;
+  });
   return result;
 }
 
@@ -333,9 +348,13 @@ function cut(draft: Draft): Segment {
   const [start, end] =
     fromStart + fromEnd < distance(p, q) ? [along(p, d, fromStart), along(q, d, -fromEnd)] : [p, q];
 
-  // ラベルを脇に置くなら、組の外側(ずらした向き)を先に試す。この線から見た向き(左が 1)に直す
-  const towards = Math.sign(offset) || 1;
-  const side = towards * (Math.sign(-d.y * normal.x + d.x * normal.y) || 1);
+  // ラベルを脇に置くなら、組の外側(ずらした向き)を先に試す。この線から見た向き(左が 1)に直す。
+  // 組でない線は、横向きなら上、縦向きなら右を先に試す(手で書くときの置き方)
+  const side = offset !== 0
+    ? Math.sign(offset) * (Math.sign(-d.y * normal.x + d.x * normal.y) || 1)
+    : Math.abs(d.x) < UPRIGHT
+      ? Math.sign(-d.y) || 1
+      : Math.sign(-d.x) || 1;
   return { statement, path: { start, control: null, end }, side };
 }
 

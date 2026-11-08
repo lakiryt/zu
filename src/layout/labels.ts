@@ -10,14 +10,18 @@ export const LABEL = { padX: 6, padY: 2, aside: 3, step: 16 };
 const ALONG = [0.5, 0.4, 0.6, 0.3, 0.7];
 // 線を横切るラベルの重さ。重なりの面積と比べる
 const CROSSING = 1000;
+// ほかの線が近くを通るラベルの重さと、その近さ。矢先がラベルを指しているように見えないよう、少し離す
+const CROWDED = 100;
+const ROOM = 8;
 
 export function labelSize(label: string) {
   const text = measureText(label);
   return { width: text.width + LABEL.padX * 2, height: text.height + LABEL.padY * 2 };
 }
 
-// path は線の通り道。side はラベルを線の脇に置くとき先に試す向き((-u.y, u.x) の側が 1、逆が -1)
-export type LabelRequest = { path: Path; label: string | null; side: number };
+// path は線の通り道。side はラベルを線の脇に置くとき先に試す向き((-u.y, u.x) の側が 1、逆が -1)。
+// on なら線の上(重ねる)を先に試す。そうでなければ脇だけに置く
+export type LabelRequest = { path: Path; label: string | null; side: number; on: boolean };
 
 // 書いた順に決める。どこも重なるなら、重なりのいちばん少ない場所にする。
 // lines は先に置いた線の通り道(requests の線とは別に、横切らないよう避ける)
@@ -29,10 +33,12 @@ export function placeLabels(requests: LabelRequest[], obstacles: Box[], lines: P
       let total = 0;
       for (const other of [...placed, ...obstacles]) total += overlapArea(box, other);
       const near = grow(box, LABEL.aside + 1);
-      requests.forEach((other, otherIndex) => {
-        if (otherIndex !== index && crosses(other.path, near)) total += CROSSING;
-      });
-      for (const other of lines) if (crosses(other, near)) total += CROSSING;
+      const around = grow(box, ROOM);
+      const others = [...requests.filter((_, otherIndex) => otherIndex !== index).map(({ path }) => path), ...lines];
+      for (const other of others) {
+        if (crosses(other, near)) total += CROSSING;
+        else if (crosses(other, around)) total += CROWDED;
+      }
       return total;
     };
     let best: Box | null = null;
@@ -50,8 +56,9 @@ export function placeLabels(requests: LabelRequest[], obstacles: Box[], lines: P
   });
 }
 
-// 試す場所の順: 線の上(中点。弧なら頂点)、線の脇(side の側から)、もう一段外。これを中点から少しずらした点でも
-function candidates({ path, side }: LabelRequest, size: { width: number; height: number }) {
+// 試す場所の順: 線の上(中点。弧なら頂点。on のときだけ)、線の脇(side の側から)、もう一段外。
+// これを中点から少しずらした点でも
+function candidates({ path, side, on }: LabelRequest, size: { width: number; height: number }) {
   const result: Box[] = [];
   for (const t of ALONG) {
     const at = pointAt(path, t);
@@ -60,7 +67,7 @@ function candidates({ path, side }: LabelRequest, size: { width: number; height:
     // 線から脇へずらす距離。ラベルの外枠の、線に直交する向きの半分の幅
     const reach = Math.abs(n.x) * (size.width / 2) + Math.abs(n.y) * (size.height / 2) + LABEL.aside;
     const far = reach + LABEL.step;
-    for (const shift of [0, side * reach, -side * reach, side * far, -side * far]) {
+    for (const shift of [...(on ? [0] : []), side * reach, -side * reach, side * far, -side * far]) {
       const center = along(at, n, shift);
       result.push({ x: center.x - size.width / 2, y: center.y - size.height / 2, ...size });
     }
