@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { ZuError, layout, parse, render } from "../src/index.ts";
 import { DEFAULT_GAP, PADDING } from "../src/layout/layout.ts";
 import type { PlacedShape } from "../src/layout/layout.ts";
+import { controlFor } from "../src/layout/lines.ts";
 import { measureText } from "../src/layout/measure.ts";
 
 // 外枠(x, y, width, height)に本体の中心(cx, cy)を添えて返す
@@ -348,6 +349,45 @@ test("lines pointed at lines report what cannot be done", () => {
   fails("text a\ntext b\na --- g as f\na --- f as g", 3, /線の向ける先が循環しています/);
   fails("text a\ntext b\na --- b as f\ntext c below f", 4, /「f」は線です\(置き方の基準には図形を書きます\)/);
   fails("text a\ntext b\na --- b as f\nalign row a f", 4, /「f」は線です\(揃えには図形を書きます\)/);
+});
+
+test("bend left bulges to the left of the way, as seen walking from one end to the other", () => {
+  const control = (source: string) => layout(parse(source)).lines[0]!.control!;
+  const east = layout(parse("text a\ntext c right of a by 200\na ---> c bend left"));
+  const { from, to } = east.lines[0]!;
+  // 右へ進む線の左は上
+  assert.ok(control("text a\ntext c right of a by 200\na ---> c bend left").y < from.point.y);
+  // 同じ left でも、左へ進む線では下
+  assert.ok(control("text a\ntext c right of a by 200\nc ---> a bend left").y > from.point.y);
+  // 下へ進む線の左は右(東)
+  const down = layout(parse("text a\ntext b below a by 200\na ---> b bend left")).lines[0]!;
+  assert.ok(down.control!.x > down.from.point.x);
+  assert.ok(to.point.x > from.point.x);
+  // 本体の中心どうしを結ぶ弧が、端で弦となす角は既定で 30°(図形の手前で切るので、引いた弧の端では少し浅い)
+  const apex = controlFor({ x: 0, y: 0 }, { x: 200, y: 0 }, { side: "left", scale: null })!;
+  close(apex.x, 100);
+  close(Math.atan2(-apex.y, 100) * (180 / Math.PI), 30);
+  // large は small より大きくふくらむ
+  assert.ok(
+    control("text a\ntext c right of a by 200\na ---> c bend left large").y <
+      control("text a\ntext c right of a by 200\na ---> c bend left small").y,
+  );
+});
+
+test("a bent line keeps its label on the bulge, is not shifted aside, and is drawn as a curve", () => {
+  const scene = layout(parse('text a\ntext c right of a by 200\na ---> c\na ---> c "上" bend left'));
+  const [straight, bent] = scene.lines;
+  // まっすぐな線は1本だけなので、ずらさない
+  close(straight!.from.point.y, scene.shapes[0]!.anchor.y);
+  // ラベルは弧の頂点(線の上)
+  const { from, to, control } = bent!;
+  const apex = { x: (from.point.x + 2 * control!.x + to.point.x) / 4, y: (from.point.y + 2 * control!.y + to.point.y) / 4 };
+  const box = bent!.labelBox!;
+  close(box.x + box.width / 2, apex.x);
+  close(box.y + box.height / 2, apex.y);
+  // 図の範囲は弧の頂点を含む
+  assert.ok(box.y >= PADDING - 1e-9);
+  assert.match(render('text a\ntext c right of a by 200\na ===> c bend left'), /<path d="M[^"]+ Q[^"]+"[^>]*\/>.*<path d="M/);
 });
 
 test("lines pointed at lines do not widen the gap between shapes", () => {

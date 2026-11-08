@@ -3,7 +3,7 @@ import { ZuError } from "../errors.ts";
 import type { Document, ShapeStatement, SourcePosition } from "../syntax/ast.ts";
 import { placeCaptions } from "./captions.ts";
 import type { PlacedCaption } from "./captions.ts";
-import { union } from "./geometry.ts";
+import { pointAt, union } from "./geometry.ts";
 import type { Box, Point } from "./geometry.ts";
 import { placeLines } from "./lines.ts";
 import type { PlacedLine } from "./lines.ts";
@@ -12,7 +12,7 @@ import { frameAt, labelOf, sizeOf } from "./size.ts";
 import type { Geometry } from "./size.ts";
 
 export type { PlacedCaption } from "./captions.ts";
-export type { Box, Point } from "./geometry.ts";
+export type { Box, Path, Point } from "./geometry.ts";
 export type { PlacedEnd, PlacedLine } from "./lines.ts";
 export { DEFAULT_GAP, defaultGap } from "./position.ts";
 export type { Geometry } from "./size.ts";
@@ -50,10 +50,15 @@ export function layout(document: Document): Scene {
     new Map(placed.map(({ statement, anchor, box, body, inner }) => [statement.id, { id: statement.id, anchor, box, body, inner }])),
   );
 
-  // 図形と線(端とラベルの下地)の範囲。図の下の文はその下に置く
+  // 図形と線(端、弧の頂点、ラベルの下地)の範囲。図の下の文はその下に置く
   const figure = union([
     ...placed.map(({ box }) => box),
-    ...lines.flatMap(({ from, to, labelBox }) => [pointBox(from.point), pointBox(to.point), ...(labelBox ? [labelBox] : [])]),
+    ...lines.flatMap(({ from, to, control, labelBox }) => [
+      pointBox(from.point),
+      pointBox(to.point),
+      ...(control ? [pointBox(pointAt({ start: from.point, control, end: to.point }, 0.5))] : []),
+      ...(labelBox ? [labelBox] : []),
+    ]),
   ]);
   const captions = placeCaptions(
     document.statements.filter((statement) => statement.kind === "caption"),
@@ -80,6 +85,7 @@ export function layout(document: Document): Scene {
       ...line,
       from: { ...line.from, point: shift(line.from.point) },
       to: { ...line.to, point: shift(line.to.point) },
+      control: line.control && shift(line.control),
       labelBox: line.labelBox && shift(line.labelBox),
     })),
     captions: captions.map((caption) => ({ ...caption, box: shift(caption.box) })),

@@ -1,11 +1,11 @@
 // 右の欄。選んでいる図形や線の中身を見せ、変えられるようにする
-import { HEADS, JUSTIFICATIONS, LINE_STYLES, SCALES, SHAPES } from "../src/index.ts";
+import { BEND_SIDES, HEADS, JUSTIFICATIONS, LINE_STYLES, SCALES, SHAPES } from "../src/index.ts";
 import type { CaptionStatement, Document, LineStatement, Scale, Shape, ShapeStatement, Size } from "../src/index.ts";
 import { openAbout } from "./about.ts";
 import { align, pointAtLine, removeSelected, setPlacement } from "./actions.ts";
 import { button, checkbox, choice, html, numberField } from "./dom.ts";
 import * as edit from "./edit.ts";
-import { HEAD_NAMES, JUSTIFY_NAMES, SCALE_NAMES, SHAPE_NAMES, STYLE_NAMES, describeBeside } from "./names.ts";
+import { BEND_NAMES, HEAD_NAMES, JUSTIFY_NAMES, SCALE_NAMES, SHAPE_NAMES, STYLE_NAMES, describeBeside } from "./names.ts";
 import { NOTHING } from "./state.ts";
 import type { Editor } from "./state.ts";
 
@@ -136,9 +136,8 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
         edit.replaceNth(editor.text, document, "line", index, next),
         next === null ? NOTHING : editor.selection,
       );
-    const { from, to } = statement;
-    // 結ぶ図形だけを入れ替える。端の印と「中まで伸ばす」は端の位置に残るので、矢印の向きが逆になる
-    const reverse = () => change({ ...statement, from: { ...from, id: to.id }, to: { ...to, id: from.id } });
+    const { from, to, bend } = statement;
+    const reverse = () => change(edit.reverseLine(statement));
 
     panel.append(
       html(
@@ -149,7 +148,18 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
         button("向きを入れ替える", reverse, { class: "small" }),
       ),
       choice("線の種類", LINE_STYLES, STYLE_NAMES, statement.style, (style) => change({ ...statement, style })),
+      // 曲げる向きは、線の向き(from から to)に進むときの左右
+      choice("曲げ方", ["none", ...BEND_SIDES] as const, BEND_NAMES, bend?.side ?? "none", (side) =>
+        change({ ...statement, bend: side === "none" ? null : { side, scale: bend?.scale ?? null } }),
+      ),
     );
+    if (bend) {
+      panel.append(
+        choice("ふくらみ", SCALES, SCALE_NAMES, bend.scale ?? "medium", (scale) =>
+          change({ ...statement, bend: { ...bend, scale: scale === "medium" ? null : scale } }),
+        ),
+      );
+    }
     for (const side of ["from", "to"] as const) {
       const end = statement[side];
       panel.append(

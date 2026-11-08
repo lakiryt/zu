@@ -153,6 +153,7 @@ test("a line statement holds both ends, the arrow and the label", () => {
     to: { id: "b", at: { line: 1, column: 11 }, head: "filled", into: false },
     label: "代理権の授与",
     id: null,
+    bend: null,
     at: { line: 1, column: 1 },
     end: { line: 1, column: 21 },
   });
@@ -182,7 +183,25 @@ test("as names a line, written before into", () => {
   const [plain] = parse("b ---> c").statements;
   assert.ok(plain?.kind === "line" && plain.id === null);
   assertError("b ---> c as", 1, 12, /線の名前が必要です/);
-  assertError("b ---> c into c as f", 1, 17, /as\(線の名前\)は into より前に書きます/);
+  assertError("b ---> c into c as f", 1, 17, /as は into より前に書きます/);
+});
+
+test("bend curves a line to the left or right of its way, with an optional size", () => {
+  const [line] = parse('a ---> c "効果帰属" as f bend left into c').statements;
+  assert.ok(line?.kind === "line");
+  assert.deepEqual(line.bend, { side: "left", scale: null });
+  const [large] = parse("a ---> c bend right large").statements;
+  assert.ok(large?.kind === "line");
+  assert.deepEqual(large.bend, { side: "right", scale: "large" });
+  for (const source of ['a ---> c "x" as f bend left into c', "a --- c bend right small"]) {
+    assert.equal(print(parse(source).statements[0]!), source);
+  }
+  assertError("a ---> c bend above", 1, 15, /曲げる向きは left か right です/);
+  assertError("a ---> c bend", 1, 14, /曲げる向き\(left か right\)が必要です/);
+  // as と bend の順は問わない。書き出すと as が先
+  assert.equal(print(parse("a ---> c bend left as f").statements[0]!), "a ---> c as f bend left");
+  assertError("a ---> c bend left bend right", 1, 20, /bend は1つの線に1つまでです/);
+  assertError("a ---> c into c bend left", 1, 17, /bend は into より前に書きます/);
 });
 
 test("size fits the shape: none for text, one number for a cube", () => {

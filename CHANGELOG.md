@@ -6,13 +6,14 @@ zu(言語とライブラリ)の版ごとの変更。版の付け方は [docs/des
 
 ### 互換を壊す変更
 
-- 構文木: `LineStatement` に線の名前 `id`(`string | null`)を足した。構文木を自分で組み立てるなら `id: null` を添える
+- 構文木: `LineStatement` に線の名前 `id`(`string | null`)と曲げ方 `bend`(`Bend | null`)を足した。構文木を自分で組み立てるなら `id: null, bend: null` を添える
 - 結べない名前の誤りの文言を「「x」という図形や線はありません」に変えた
 
 ### 追加
 
 - 線に名前を付け(`b ---> c "詐害行為" as f`)、ほかの線をその線に向けられるようにした(`x ---> f "取消"`)。向けた線は相手の線の中点を狙い、線の上にラベルがあればラベルに当てる。同じ線に向けた端は線に沿って離す
-- 配置: `PlacedLine` に線の名前 `id` を足した。`PlacedEnd.id` は線の名前のこともある
+- 線を弧に曲げる `bend left` / `bend right` を足した(進む向きから見た左右。TikZ と同じ)。`small`/`large` を添えるとふくらみが変わる
+- 配置: `PlacedLine` に線の名前 `id` と、曲げた線の制御点 `control` を足した。`PlacedEnd.id` は線の名前のこともある。通り道の型 `Path` と、`BEND_SIDES`、`Bend`、`BendSide` を公開する
 
 ## 0.3.0 (2026-11-08)
 

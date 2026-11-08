@@ -1,20 +1,21 @@
 // 線の両端の位置とラベルの場所を決める。図形の位置には、ラベルの入る間(roomFor)を通してだけ影響する
 import { ZuError } from "../errors.ts";
-import type { Head, LineStatement, LineStyle } from "../syntax/ast.ts";
-import { along, clip, direction, distance, grow } from "./geometry.ts";
-import type { Box, Point } from "./geometry.ts";
+import type { Bend, Head, LineStatement, LineStyle, Scale } from "../syntax/ast.ts";
+import { along, clip, contains, direction, distance, grow, pointAt, subPath, tangentAt } from "./geometry.ts";
+import type { Box, Path, Point } from "./geometry.ts";
 import { aimInside, spreadTips, tipInside } from "./into.ts";
-import { LABEL, labelSize, placeLabels } from "./labels.ts";
+import { LABEL, crosses, labelSize, placeLabels } from "./labels.ts";
 
 // 線の端。id はつないだ図形か線。point は線の端の位置(図形の本体の手前か、中まで伸ばした所)
 export type PlacedEnd = { id: string; point: Point; head: Head };
 
-// id は線の名前(as。なければ null)
+// id は線の名前(as。なければ null)。control は曲げた線(bend)の2次ベジェ曲線の制御点(まっすぐなら null)
 export type PlacedLine = {
   id: string | null;
   style: LineStyle;
   from: PlacedEnd;
   to: PlacedEnd;
+  control: Point | null;
   label: string | null;
   // ラベルの下地の外枠
   labelBox: Box | null;
@@ -33,8 +34,22 @@ const ONTO = { label: 1, line: 1.5, double: 3, spacing: 12, shallow: 0.3 };
 
 // 線を向ける先。図形か、名前を付けた線。線なら anchor は当てる点、body は当てる枠(ラベルの下地か、大きさのない点)。
 // margin は線の端を body のどれだけ手前で止めるか。
-// along は線そのものに当てるときのその線(anchor を中点とする向き u、長さ length)。当てる点はこの線の上で動かす
+// along は線そのものに当てるときのその線(anchor を通る向き u、長さ length)。当てる点はこの線の上で動かす
 type Target = ShapeFrame & { margin: number; along: { u: Point; length: number } | null };
+
+// 曲げた線が、端で弦(両端を結ぶ線分)となす角(度)。大きさの語ごと
+const BEND_ANGLES: Record<Scale, number> = { small: 15, medium: 30, large: 45 };
+
+// p から q へ向かう線を bend の側へふくらませる制御点。まっすぐなら null
+export function controlFor(p: Point, q: Point, bend: Bend | null): Point | null {
+  if (!bend) return null;
+  const u = direction(p, q);
+  // 進む向きの左。SVG の座標は y が下向きなので (u.y, -u.x)
+  const left = { x: u.y, y: -u.x };
+  const height = (distance(p, q) / 2) * Math.tan((BEND_ANGLES[bend.scale ?? "medium"] * Math.PI) / 180);
+  const middle = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+  return along(middle, left, bend.side === "left" ? height : -height);
+}
 
 // 矢先の大きさ。二重線は2本を覆うよう大きくする。描く段(svg)もこれを使う
 export const HEAD = { length: 12, width: 10, radius: 4, doubleScale: 1.35 };
@@ -51,10 +66,11 @@ export function headLength(head: Head, style: LineStyle) {
 // 1. a と b を結ぶ線のラベルと矢先
 // 2. a と b の両方と線で結ばれた図形 t があれば(三角形)、t へ向かう2辺のラベルを a と b の間に積める分。
 //    三角形の辺のラベルは、a と b の間の幅に並ぶので
-// 線に向けた線は数えない(図形の位置は、図形どうしを結ぶ線だけで決める)
+// 線に向けた線は数えない(図形の位置は、図形どうしを結ぶ線だけで決める)。
+// 曲げた線も数えない(ラベルは2つの図形の間でなく、弧の頂点に来るので)
 export function roomFor(all: LineStatement[], a: string, b: string, coord: "x" | "y") {
   const names = new Set(all.flatMap(({ id }) => (id === null ? [] : [id])));
-  const statements = all.filter(({ from, to }) => !names.has(from.id) && !names.has(to.id));
+  const statements = all.filter(({ from, to, bend }) => bend === null && !names.has(from.id) && !names.has(to.id));
   const between = (p: string, q: string) =>
     statements.filter(({ from, to }) => (from.id === p && to.id === q) || (from.id === q && to.id === p));
   const extent = (label: string) => labelSize(label)[coord === "x" ? "width" : "height"];
@@ -90,6 +106,9 @@ type Draft = {
   offset: number;
 };
 
+// 置いた線の通り道と、ラベルを脇に置くとき先に試す向き
+type Segment = { statement: LineStatement; path: Path; side: number };
+
 // 図形どうしを結ぶ線を先に置き、線に向けた線は、向ける先の線が決まってから順に置く
 export function placeLines(statements: LineStatement[], shapes: Map<string, ShapeFrame>): PlacedLine[] {
   check(statements, shapes);
@@ -99,7 +118,7 @@ export function placeLines(statements: LineStatement[], shapes: Map<string, Shap
   const result: PlacedLine[] = [];
   // ラベルが避けるもの。図形、矢先、先に置いたラベルと線
   const obstacles = [...shapes.values()].map(({ box }) => box);
-  const earlier: { start: Point; end: Point }[] = [];
+  const earlier: Path[] = [];
 
   let waiting = statements.map((statement, index) => ({ statement, index }));
   while (waiting.length > 0) {
@@ -116,23 +135,24 @@ export function placeLines(statements: LineStatement[], shapes: Map<string, Shap
 
     obstacles.push(...segments.flatMap(headBoxes));
     const labelBoxes = placeLabels(
-      segments.map(({ statement, start, end, side }) => ({ start, end, label: statement.label, side })),
+      segments.map(({ statement, path, side }) => ({ path, label: statement.label, side })),
       obstacles,
       earlier,
     );
 
-    segments.forEach(({ statement, start, end }, index) => {
+    segments.forEach(({ statement, path }, index) => {
       const line: PlacedLine = {
         id: statement.id,
         style: statement.style,
-        from: { id: statement.from.id, point: start, head: statement.from.head },
-        to: { id: statement.to.id, point: end, head: statement.to.head },
+        from: { id: statement.from.id, point: path.start, head: statement.from.head },
+        to: { id: statement.to.id, point: path.end, head: statement.to.head },
+        control: path.control,
         label: statement.label,
         labelBox: labelBoxes[index]!,
         over: statement.from.into || statement.to.into,
       };
       result[ready[index]!.index] = line;
-      earlier.push({ start, end });
+      earlier.push(path);
       if (line.labelBox) obstacles.push(line.labelBox);
       if (line.id !== null) targets.set(line.id, lineTarget(line.id, line));
     });
@@ -162,23 +182,23 @@ function check(statements: LineStatement[], shapes: Map<string, ShapeFrame>) {
   }
 }
 
-// 線に向ける線の当て先。線の中点を狙う。線がラベルの下地を通っていれば(ラベルが線の上にあれば)、ラベルに当てる
-function lineTarget(id: string, { style, from, to, labelBox }: PlacedLine): Target {
-  const p = from.point;
-  const q = to.point;
-  if (labelBox && clip(p, { x: q.x - p.x, y: q.y - p.y }, labelBox, 0, 1)) {
+// 線に向ける線の当て先。線の中点(弧なら頂点)を狙う。線がラベルの下地を通っていれば(ラベルが線の上にあれば)、
+// ラベルに当てる。当てる点を動かすのは、中点での接線の上(弧でも、間隔の分ならほとんど離れない)
+function lineTarget(id: string, { style, from, to, control, labelBox }: PlacedLine): Target {
+  const path = { start: from.point, control, end: to.point };
+  if (labelBox && crosses(path, labelBox)) {
     const anchor = { x: labelBox.x + labelBox.width / 2, y: labelBox.y + labelBox.height / 2 };
     return { id, anchor, body: labelBox, inner: labelBox, box: labelBox, margin: ONTO.label, along: null };
   }
-  const u = direction(p, q);
-  const length = distance(p, q);
-  const middle = along(p, u, length / 2);
+  const u = tangentAt(path, 0.5);
+  const length = distance(from.point, to.point);
+  const middle = pointAt(path, 0.5);
   const point = { ...middle, width: 0, height: 0 };
   const margin = style === "double" ? ONTO.double : ONTO.line;
   return { id, anchor: middle, body: point, inner: point, box: point, margin, along: { u, length } };
 }
 
-// 線そのものに当てる端の、当てる点の位置(線の中点から線に沿って測った長さ)
+// 線そのものに当てる端の、当てる点の位置(当てる線の中点から、線に沿って測った長さ)
 const positionOn = (frame: Target, point: Point) =>
   (point.x - frame.anchor.x) * frame.along!.u.x + (point.y - frame.anchor.y) * frame.along!.u.y;
 
@@ -189,29 +209,35 @@ function pointOn(frame: Target, t: number) {
 }
 
 // 矢先の占める枠。ラベルはこれを避ける
-function headBoxes({ statement, start, end }: { statement: LineStatement; start: Point; end: Point }) {
+function headBoxes({ statement, path }: Segment) {
   return (
     [
-      [start, statement.from.head],
-      [end, statement.to.head],
+      [path.start, statement.from.head],
+      [path.end, statement.to.head],
     ] as const
   )
     .filter(([, head]) => head !== "none")
     .map(([point, head]) => grow({ ...point, width: 0, height: 0 }, headLength(head, statement.style)));
 }
 
-// 1. 本体の中心(線なら当てる点)どうしを結ぶ。同じ2つを結ぶ線は、平行にずらして重ならないようにする
+// 1. 本体の中心(線なら当てる点)どうしを結ぶ。同じ2つを結ぶまっすぐな線は、平行にずらして重ならないようにする。
+//    曲げた線はふくらみで分かれるので、ずらさない
 function draftLines(statements: LineStatement[], frames: Map<string, Target>): Draft[] {
   const pairKey = ({ from, to }: LineStatement) => [from.id, to.id].sort().join("\u0000");
   const counts = new Map<string, number>();
-  for (const statement of statements) counts.set(pairKey(statement), (counts.get(pairKey(statement)) ?? 0) + 1);
+  for (const statement of statements) {
+    if (statement.bend === null) counts.set(pairKey(statement), (counts.get(pairKey(statement)) ?? 0) + 1);
+  }
   const seen = new Map<string, number>();
 
   return statements.map((statement) => {
     const key = pairKey(statement);
-    const order = seen.get(key) ?? 0;
-    seen.set(key, order + 1);
-    const offset = (order - (counts.get(key)! - 1) / 2) * LINE.spacing;
+    let offset = 0;
+    if (statement.bend === null) {
+      const order = seen.get(key) ?? 0;
+      seen.set(key, order + 1);
+      offset = (order - (counts.get(key)! - 1) / 2) * LINE.spacing;
+    }
 
     const a = frames.get(statement.from.id)!;
     const b = frames.get(statement.to.id)!;
@@ -227,9 +253,11 @@ function draftLines(statements: LineStatement[], frames: Map<string, Target>): D
       return into ? aimInside(point, frame.inner) : point;
     };
     const aims: [Point, Point] = [aim(a, statement.from.into), aim(b, statement.to.into)];
+    // 中まで伸ばす端は、線が入ってくる向きで決める。曲げた線は制御点の側から入る
+    const control = controlFor(aims[0], aims[1], statement.bend);
     const tips: Draft["tips"] = [
-      statement.from.into ? tipInside(a.inner, aims[0], aims[1]) : null,
-      statement.to.into ? tipInside(b.inner, aims[1], aims[0]) : null,
+      statement.from.into ? tipInside(a.inner, aims[0], control ?? aims[1]) : null,
+      statement.to.into ? tipInside(b.inner, aims[1], control ?? aims[0]) : null,
     ];
     return { statement, frames: [a, b], aims, tips, normal, offset };
   });
@@ -278,21 +306,19 @@ function spreadOnLines(drafts: Draft[]) {
 }
 
 // 3. 線の両端を決める。中まで伸ばす端はその点、ほかの端は本体の手前で切る
-function cut({ statement, frames, aims, tips, normal, offset }: Draft) {
+function cut(draft: Draft): Segment {
+  const { statement, aims, tips, normal, offset } = draft;
   const p = tips[0] ?? aims[0];
   const q = tips[1] ?? aims[1];
+  const control = controlFor(p, q, statement.bend);
+  if (control) {
+    // ラベルを脇に置くなら、ふくらんだ外側を先に試す。脇の向きは (-u.y, u.x) が 1 で、左へのふくらみはその逆
+    const side = statement.bend!.side === "left" ? -1 : 1;
+    return { statement, path: cutCurve(draft, { start: p, control, end: q }), side };
+  }
   const d = direction(p, q);
-  // 向かう点から、本体(に余白を足した枠)の外へ出るまでの長さ。
-  // 線そのものに当てる端は、その線から margin 離れるまでの長さ(浅く当たっても離れすぎないよう、角度は抑える)
-  const leave = (frame: Target, from: Point, toward: Point) => {
-    if (frame.along) {
-      const sine = Math.abs(toward.x * frame.along.u.y - toward.y * frame.along.u.x);
-      return frame.margin / Math.max(sine, ONTO.shallow);
-    }
-    return clip(from, toward, grow(frame.body, frame.margin))?.[1] ?? 0;
-  };
-  const fromStart = tips[0] ? 0 : leave(frames[0], p, d);
-  const fromEnd = tips[1] ? 0 : leave(frames[1], q, { x: -d.x, y: -d.y });
+  const fromStart = tips[0] ? 0 : leave(draft.frames[0], p, d);
+  const fromEnd = tips[1] ? 0 : leave(draft.frames[1], q, { x: -d.x, y: -d.y });
   // 図形が重なっていて切ると線が残らないときは、向かう点どうしを結ぶ
   const [start, end] =
     fromStart + fromEnd < distance(p, q) ? [along(p, d, fromStart), along(q, d, -fromEnd)] : [p, q];
@@ -300,5 +326,49 @@ function cut({ statement, frames, aims, tips, normal, offset }: Draft) {
   // ラベルを脇に置くなら、組の外側(ずらした向き)を先に試す。この線から見た向き(左が 1)に直す
   const towards = Math.sign(offset) || 1;
   const side = towards * (Math.sign(-d.y * normal.x + d.x * normal.y) || 1);
-  return { statement, start, end, side };
+  return { statement, path: { start, control: null, end }, side };
+}
+
+// 向かう点 from から toward の向きへ、本体(に余白を足した枠)の外へ出るまでの長さ。
+// 線そのものに当てる端は、その線から margin 離れるまでの長さ(浅く当たっても離れすぎないよう、角度は抑える)
+function leave(frame: Target, from: Point, toward: Point) {
+  if (frame.along) {
+    const sine = Math.abs(toward.x * frame.along.u.y - toward.y * frame.along.u.x);
+    return frame.margin / Math.max(sine, ONTO.shallow);
+  }
+  return clip(from, toward, grow(frame.body, frame.margin))?.[1] ?? 0;
+}
+
+// 曲げた線を、両端の本体の手前で切る
+function cutCurve({ frames, tips }: Draft, path: Path): Path {
+  const t0 = tips[0] ? 0 : leaveCurve(frames[0], path, false);
+  const t1 = tips[1] ? 1 : 1 - leaveCurve(frames[1], path, true);
+  // 図形が重なっていて切ると線が残らないときは、向かう点どうしを結ぶ
+  return t0 < t1 ? subPath(path, t0, t1) : path;
+}
+
+// 端(fromEnd なら end)から本体の外へ出るまでの、t の幅
+function leaveCurve(frame: Target, path: Path, fromEnd: boolean) {
+  const point = (t: number) => pointAt(path, fromEnd ? 1 - t : t);
+  if (frame.along) {
+    // 端の近くの弧はほぼまっすぐなので、まっすぐな線と同じ長さを、端での速さ(t あたりの長さ)で t に直す
+    const u = tangentAt(path, fromEnd ? 1 : 0);
+    const speed = 2 * (fromEnd ? distance(path.control!, path.end) : distance(path.start, path.control!));
+    return speed === 0 ? 0 : Math.min(leave(frame, point(0), u) / speed, 0.5);
+  }
+  const box = grow(frame.body, frame.margin);
+  if (!contains(box, point(0))) return 0;
+  // 外へ出る最初の t を、細かく刻んで見つけてから二分法で詰める
+  const steps = 64;
+  let k = 1;
+  while (k <= steps && contains(box, point(k / steps))) k++;
+  if (k > steps) return 0;
+  let low = (k - 1) / steps;
+  let high = k / steps;
+  for (let step = 0; step < 30; step++) {
+    const middle = (low + high) / 2;
+    if (contains(box, point(middle))) low = middle;
+    else high = middle;
+  }
+  return high;
 }

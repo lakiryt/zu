@@ -1,6 +1,6 @@
 // 置き終えた図(Scene)を SVG の文字列にする。大きさや位置は計算し直さない
-import { along, direction, distance } from "../layout/geometry.ts";
-import type { Point } from "../layout/geometry.ts";
+import { along, direction, distance, offsetPath, tangentAt, trimPath } from "../layout/geometry.ts";
+import type { Path, Point } from "../layout/geometry.ts";
 import type { PlacedCaption, PlacedLine, PlacedShape, Scene } from "../layout/layout.ts";
 import { HEAD, headScale } from "../layout/lines.ts";
 import { FONT_SIZE, LINE_HEIGHT, labelLines } from "../layout/measure.ts";
@@ -120,11 +120,14 @@ function drawHead(kind: Head, tip: Point, u: Point, scale: number, spread: numbe
   };
 }
 
-function drawLine({ style, from, to, label, labelBox }: PlacedLine) {
+function drawLine(line: PlacedLine) {
+  const { style, from, to, control, label, labelBox } = line;
   const parts: string[] = [];
   const start = from.point;
   const end = to.point;
-  if (distance(start, end) > 0) {
+  if (control && distance(start, end) > 0) {
+    parts.push(drawCurve(line, { start, control, end }));
+  } else if (distance(start, end) > 0) {
     const u = direction(start, end);
     const scale = headScale(style);
     const spread = style === "double" ? DOUBLE_GAP / 2 : 0;
@@ -155,6 +158,25 @@ function drawLine({ style, from, to, label, labelBox }: PlacedLine) {
     );
   }
   return parts.join("");
+}
+
+// 曲げた線。矢先は端での接線の向きに付け、線は矢先の根元で止める。二重線は両側へずらした2本の弧
+function drawCurve({ style, from, to }: PlacedLine, path: Path) {
+  const scale = headScale(style);
+  const spread = style === "double" ? DOUBLE_GAP / 2 : 0;
+  const atStart = tangentAt(path, 0);
+  const startHead = drawHead(from.head, path.start, { x: -atStart.x, y: -atStart.y }, scale, spread);
+  const endHead = drawHead(to.head, path.end, tangentAt(path, 1), scale, spread);
+  const body = trimPath(path, startHead.back, endHead.back);
+  const dash = style === "dotted" ? ` stroke-dasharray="${DASH}"` : "";
+  const offsets = style === "double" ? [DOUBLE_GAP / 2, -DOUBLE_GAP / 2] : [0];
+  const cap = style === "double" ? "butt" : "round";
+  const curves = offsets.map((offset) => {
+    const { start, control, end } = offsetPath(body, offset);
+    const d = `M${round(start.x)},${round(start.y)} Q${round(control!.x)},${round(control!.y)} ${round(end.x)},${round(end.y)}`;
+    return `<path d="${d}" fill="none" stroke="${STROKE}" stroke-width="${STROKE_WIDTH[style]}"${dash} stroke-linecap="${cap}"/>`;
+  });
+  return [...curves, startHead.svg, endHead.svg].join("");
 }
 
 // 図の下の文。行を外枠の左、中央、右に揃えて書く

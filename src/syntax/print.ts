@@ -34,6 +34,7 @@ export function print(statement: Statement) {
       parts.push(from.id, writeArrow({ style, start: from.head, end: to.head }), to.id);
       if (label !== null) parts.push(quote(label));
       if (statement.id !== null) parts.push("as", statement.id);
+      if (statement.bend) parts.push("bend", statement.bend.side, ...(statement.bend.scale ? [statement.bend.scale] : []));
       const into = [from, to].filter((end) => end.into).map((end) => end.id);
       if (into.length > 0) parts.push("into", ...into);
       break;

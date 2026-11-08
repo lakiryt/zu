@@ -1,8 +1,9 @@
 // 字句の列を文の列にする。1行に1文で、行の途中で誤りがあればその位置を報告する
 import { ZuError } from "../errors.ts";
-import { AXES, DIRECTIONS, JUSTIFICATIONS, SCALES, SHAPES } from "./ast.ts";
+import { AXES, BEND_SIDES, DIRECTIONS, JUSTIFICATIONS, SCALES, SHAPES } from "./ast.ts";
 import type {
   AlignStatement,
+  Bend,
   CaptionStatement,
   Direction,
   Document,
@@ -73,8 +74,8 @@ export function parse(source: string): Document {
     return shape(head, head.value);
   }
 
-  // a ---> b "ラベル" as f into b: 2つの図形(か線)を線で結ぶ。as で線に名前を付け、
-  // into に挙げた図形には線を中まで伸ばす
+  // a ---> b "ラベル" as f bend left into b: 2つの図形(か線)を線で結ぶ。as で線に名前を付け、
+  // bend で曲げ、into に挙げた図形には線を中まで伸ばす
   function line(head: Token): LineStatement {
     const { style, start, end } = readArrow(next().value)!;
     const to = expect("word", "結ぶ先の図形の名前");
@@ -83,23 +84,36 @@ export function parse(source: string): Document {
       { id: head.value, at: head.at, head: start, into: false },
       { id: to.value, at: to.at, head: end, into: false },
     ];
+    // as と bend はどちらを先に書いてもよい。into は残りの語を読むので最後
     let id: string | null = null;
-    if (peekWord("as")) {
-      next();
-      id = expect("word", "線の名前").value;
+    let bend: Bend | null = null;
+    while (peekWord("as") || peekWord("bend")) {
+      const option = next();
+      if (option.value === "as") {
+        if (id !== null) throw new ZuError("as は1つの線に1つまでです", option.at);
+        id = expect("word", "線の名前").value;
+        continue;
+      }
+      if (bend !== null) throw new ZuError("bend は1つの線に1つまでです", option.at);
+      const side = expect("word", "曲げる向き(left か right)");
+      if (!oneOf(BEND_SIDES, side.value)) {
+        throw new ZuError(`曲げる向きは left か right です(「${side.value}」がありました)`, side.at);
+      }
+      const scale = peek().type === "word" && oneOf(SCALES, peek().value) ? (next().value as Bend["scale"]) : null;
+      bend = { side: side.value, scale };
     }
     if (!atLineEnd()) {
       if (!peekWord("into")) {
         throw new ZuError(
-          `線の文には${describe(peek())}を書けません(ラベルは "…"、名前は as、中まで伸ばすのは into で書きます)`,
+          `線の文には${describe(peek())}を書けません(ラベルは "…"、名前は as、曲げ方は bend、中まで伸ばすのは into で書きます)`,
           peek().at,
         );
       }
       next();
       do {
         const target = expect("word", "中まで伸ばす図形の名前");
-        if (target.value === "as" && !ends.some((end) => end.id === "as")) {
-          throw new ZuError("as(線の名前)は into より前に書きます", target.at);
+        if ((target.value === "as" || target.value === "bend") && !ends.some((end) => end.id === target.value)) {
+          throw new ZuError(`${target.value} は into より前に書きます`, target.at);
         }
         // 同じ図形どうしを結んだ線(配置の段で誤りにする)でも、まだ into でない側を選ぶ
         const end = ends.find((end) => end.id === target.value && !end.into);
@@ -114,7 +128,7 @@ export function parse(source: string): Document {
       } while (!atLineEnd());
     }
     const [from, toEnd] = ends;
-    return { kind: "line", style, from, to: toEnd, label, id, at: head.at, end: last().end };
+    return { kind: "line", style, from, to: toEnd, label, id, bend, at: head.at, end: last().end };
   }
 
   // align row a b c: 挙げた図形を同じ段(column なら同じ列)に揃える

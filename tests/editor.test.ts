@@ -7,6 +7,7 @@ import { Editor } from "../editor/state.ts";
 import { nearest, placementsFor, slide, slots } from "../editor/snap.ts";
 import { DEFAULT_GAP, defaultGap, layout } from "../src/layout/layout.ts";
 import { parse } from "../src/syntax/parser.ts";
+import { print } from "../src/syntax/print.ts";
 
 const close = (actual: number, expected: number) =>
   assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} は ${expected} ではありません`);
@@ -291,4 +292,19 @@ test("renaming a line updates the lines pointed at it", () => {
   const text = "text b\ntext c\ntext x\nb --- c as f\nx ---> f\n";
   assert.equal(edit.rename(text, parse(text), "f", "詐害"), "text b\ntext c\ntext x\nb --- c as 詐害\nx ---> 詐害\n");
   assert.ok(edit.isPointedAt(parse(text), "f"));
+});
+
+test("reversing a line swaps what it joins and the side it bends to, keeping heads and the curve in place", () => {
+  const [line] = parse("a ---o b bend left large into b").statements;
+  assert.ok(line?.kind === "line");
+  const reversed = edit.reverseLine(line);
+  assert.equal(print(reversed), "b ---o a bend right large into a");
+  // 入れ替えても弧は同じ側にふくらむ
+  const control = (source: string) => layout(parse(`text a\ntext b right of a by 200\n${source}`)).lines[0]!.control!;
+  const [plain] = parse("a ---> b bend left").statements;
+  assert.ok(plain?.kind === "line");
+  const before = control("a ---> b bend left");
+  const after = control(print(edit.reverseLine(plain)));
+  close(before.x, after.x);
+  close(before.y, after.y);
 });

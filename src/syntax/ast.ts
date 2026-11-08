@@ -57,8 +57,16 @@ export type Head = (typeof HEADS)[number];
 // into なら線を図形の本体の中まで伸ばす(印が図形に刺さった形。線には使えない)
 export type LineEnd = { id: string; at: SourcePosition; head: Head; into: boolean };
 
-// a ---> b "ラベル" as f into b。from は記号の左、to は右の図形(か線)。
-// id は線の名前(as で付ける。なければ null)。名前を付けた線には、ほかの線を向けられる
+// 線を曲げる向き。from から to へ進むときの左右(TikZ の bend left、bend right と同じ)
+export const BEND_SIDES = ["left", "right"] as const;
+export type BendSide = (typeof BEND_SIDES)[number];
+
+// bend left large。side の側へふくらむ弧にする。scale はふくらみの大きさ(null は既定の medium)
+export type Bend = { side: BendSide; scale: Scale | null };
+
+// a ---> b "ラベル" as f bend left into b。from は記号の左、to は右の図形(か線)。
+// id は線の名前(as で付ける。なければ null)。名前を付けた線には、ほかの線を向けられる。
+// bend は曲げ方(null ならまっすぐ)
 export type LineStatement = {
   kind: "line";
   style: LineStyle;
@@ -66,6 +74,7 @@ export type LineStatement = {
   to: LineEnd;
   label: string | null;
   id: string | null;
+  bend: Bend | null;
   at: SourcePosition;
   end: SourcePosition;
 };

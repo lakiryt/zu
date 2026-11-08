@@ -206,9 +206,22 @@ export function addLine(text: string, from: string, to: string) {
     to: lineEnd(to),
     label: null,
     id: null,
+    bend: null,
     at: NOWHERE,
     end: NOWHERE,
   });
+}
+
+// 線の向きを入れ替える。結ぶものだけを入れ替え、端の印と「中まで伸ばす」は端の位置に残すので、矢印が逆を向く。
+// 曲げ方の左右も入れ替え、弧の形は変えない
+export function reverseLine(statement: LineStatement): LineStatement {
+  const { from, to, bend } = statement;
+  return {
+    ...statement,
+    from: { ...from, id: to.id },
+    to: { ...to, id: from.id },
+    bend: bend && { ...bend, side: bend.side === "left" ? "right" : "left" },
+  };
 }
 
 // 図形 from から index 番目の線へ矢印を引く。線に名前がなければ付ける。新しい線は最後の線になる
@@ -224,6 +237,7 @@ export function pointAtLine(text: string, document: Document, from: string, inde
     to: lineEnd(name, "open"),
     label: null,
     id: null,
+    bend: null,
     at: NOWHERE,
     end: NOWHERE,
   });

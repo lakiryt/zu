@@ -418,6 +418,7 @@ main {
 }
 
 #stage .line .hit {
+  fill: none;
   stroke: transparent;
   stroke-width: 14;
   stroke-linecap: round;

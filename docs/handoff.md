@@ -42,6 +42,7 @@ block-beta:
 - 線: `a ---> b "ラベル"`。実線 `---`、点線 `-.-`、二重線 `===` と、両端の印(`>` V字の矢印、`>>` 塗りつぶした矢印、`o` 丸)を組み合わせる。同じ2つの図形を結ぶ線は平行にずらす(2026-11-07 追加)
 - 線の端を図形の中まで伸ばす `a ---o b into b`(2026-11-08 追加)。同じ図形に刺さる端は互いに離す
 - 線に名前を付け、ほかの線をその線に向ける `b ---> c "詐害行為" as f` と `x ---> f`(2026-11-08 追加)
+- 線を弧に曲げる `a ---> c bend left`(進む向きから見た左右、TikZ 式。`small`/`large` でふくらみを変える。2026-11-08 追加)
 - 図全体の下の文 `caption "…"`(2026-11-08 追加)。既定は左詰めで図の中と同じ字の大きさ。`center`/`right`、`size small`/`large` で変える
 
 詳しくは SPEC.md。
@@ -52,13 +53,13 @@ block-beta:
 
 - [design/placement.md](design/placement.md): 数値に頼らない置き方(揃え、並び、間の段階)
 - [design/lines.md](design/lines.md): 線と矢印。決めたことと未決
-- [design/line-targets-and-curves.md](design/line-targets-and-curves.md): 線に向かう線(入れた)と曲がる線(TikZ 式の `bend` に決めた)の検討
+- [design/line-targets-and-curves.md](design/line-targets-and-curves.md): 線に向かう線と曲がる線(弧は入れた。折れる線は未定)の検討
 - [design/editor.md](design/editor.md): 視覚的なエディタ(`editor/`)。できること、暫定の判断、未決
 - [design/versioning.md](design/versioning.md): 版の付け方と出し方(変更の記録は [CHANGELOG.md](../CHANGELOG.md))
 - [design/brand.md](design/brand.md): 名前(Law図)、ロゴ、検索と共有の情報
 - [research/mermaid-layout.md](research/mermaid-layout.md): Mermaid の配置と大きさの扱いの調べ
 
-- 線の続き([design/lines.md](design/lines.md) の「未決」)。ラベルどうしの重なりの回避、図形のどこにつなぐかの指定、曲がる線など
+- 線の続き([design/lines.md](design/lines.md) の「未決」)。ラベルどうしの重なりの回避、図形のどこにつなぐかの指定、直角に折れる線など
 - 図形の追加(人を表す記号、枠付きの箱など)。土地と動産以外の物の表し方
 - 文字幅は全角1字、それ以外0.6字で見積もっている。書体によっては長い文字列がずれる
 - 名前: サイト(エディタ)は Law図(ローズ)、言語と拡張子は zu と `.zu` のまま(2026-11-08 決定、[design/brand.md](design/brand.md))

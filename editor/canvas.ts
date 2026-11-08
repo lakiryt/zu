@@ -89,21 +89,17 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
         group.appendChild(mark);
       }
     }
-    // 線は細いので、つかみやすいよう太い透明の線を重ねる
-    scene.lines.forEach((line, index) => {
+    // 線は細いので、つかみやすいよう太い透明の線を重ねる。曲げた線には同じ弧を重ねる
+    scene.lines.forEach(({ from, to, control }, index) => {
       const group = root.querySelector(`g[data-line="${index}"]`);
       if (!group) return;
       group.classList.add("line");
-      group.insertBefore(
-        svgElement("line", {
-          class: "hit",
-          x1: line.from.point.x,
-          y1: line.from.point.y,
-          x2: line.to.point.x,
-          y2: line.to.point.y,
-        }),
-        group.firstChild,
-      );
+      const { x: x1, y: y1 } = from.point;
+      const { x: x2, y: y2 } = to.point;
+      const hit = control
+        ? svgElement("path", { class: "hit", d: `M${x1},${y1} Q${control.x},${control.y} ${x2},${y2}` })
+        : svgElement("line", { class: "hit", x1, y1, x2, y2 });
+      group.insertBefore(hit, group.firstChild);
     });
     root.appendChild(svgElement("g", { id: "overlay" }));
     drawSelection();
