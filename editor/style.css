@@ -338,6 +338,25 @@ main {
   min-height: 0;
 }
 
+/* 文字の欄の上の、サンプルを選ぶ欄 */
+.samples {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.samples select {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--text);
+}
+
 #source {
   flex: 1;
   resize: none;

@@ -1,0 +1,14 @@
+%% 物の置き方: 土地は平行四辺形、動産は立方体。大きさは語で選ぶ
+text a "売主(A)"
+text b "買主(B)" right of a by 160
+parallelogram land "甲土地" below a
+cube item "絵画\n(時価100万円)" below b
+cube ring "指輪" right of item size small
+
+%% 甲土地と絵画を同じ段に揃える
+align row land item
+
+%% into で、線の端を物の中まで伸ばす
+a ---> b "売買"
+a ---o land into land
+b ---o item into item

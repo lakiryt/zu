@@ -1,0 +1,9 @@
+%% 曲げた線: 同じ二人の間の行き来を、上下に分ける
+text a "売主(A)"
+text b "買主(B)" right of a by 200
+
+%% bend left は、線の向きに進んで左へふくらむ。A→B は上へ、B→A は下へ
+a ---> b "目的物の引渡し" bend left
+b ---> a "代金の支払い" bend left
+
+caption "同時履行の関係にある二つの債務。"

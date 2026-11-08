@@ -1,16 +1,16 @@
 // エディタの入口。画面の各欄を作り、Editor の変化をつなぐ。
 // 正本は左の .zu の文字で、図やパネルの操作は文字を書き換えてから描き直す
-import SAMPLE from "../examples/agency.zu?raw";
 import { setUpAbout } from "./about.ts";
 import { removeSelected } from "./actions.ts";
 import { createCanvas } from "./canvas.ts";
 import { element } from "./dom.ts";
 import * as edit from "./edit.ts";
 import { createPanel } from "./panel.ts";
+import { SAMPLES } from "./samples.ts";
 import { Editor, NOTHING } from "./state.ts";
 import { createToolbar } from "./toolbar.ts";
 
-// 作業中の文字は、このブラウザにだけ覚える。初めて開いたときは examples/agency.zu を出す
+// 作業中の文字は、このブラウザにだけ覚える。初めて開いたときは最初のサンプルを出す
 const STORAGE_KEY = "zu-editor:source";
 const STATUS_DURATION = 4000;
 
@@ -18,6 +18,8 @@ const source = element<HTMLTextAreaElement>("source");
 const errorBox = element<HTMLDivElement>("error");
 const status = element<HTMLDivElement>("status");
 const fileInput = element<HTMLInputElement>("file");
+const samples = element<HTMLSelectElement>("samples");
+const SAMPLE = SAMPLES[0]!.source;
 
 function load() {
   try {
@@ -81,6 +83,17 @@ function selectFromCursor() {
 }
 source.addEventListener("click", selectFromCursor);
 source.addEventListener("keyup", selectFromCursor);
+
+// サンプルを選ぶと、文字を置き換える。置き換えは履歴に残るので、元に戻せる
+samples.append(new Option("選んで開く", ""), ...SAMPLES.map(({ name }, index) => new Option(name, String(index))));
+samples.addEventListener("change", () => {
+  const sample = SAMPLES[Number(samples.value)];
+  samples.value = "";
+  if (!sample) return;
+  editor.fileName = sample.file;
+  editor.replaceAll(sample.source);
+  say(`サンプル「${sample.name}」を開きました。元の文字には Ctrl+Z で戻せます`);
+});
 
 fileInput.addEventListener("change", async () => {
   const file = fileInput.files?.[0];
