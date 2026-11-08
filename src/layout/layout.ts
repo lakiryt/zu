@@ -7,7 +7,7 @@ import { placeCaptions } from "./captions.ts";
 import type { PlacedCaption } from "./captions.ts";
 import { pointAt, union } from "./geometry.ts";
 import type { Box, Point } from "./geometry.ts";
-import { placeLines } from "./lines.ts";
+import { pathOf, placeLines } from "./lines.ts";
 import type { PlacedLine } from "./lines.ts";
 import { solvePositions } from "./position.ts";
 import { frameAt, labelOf, sizeOf } from "./size.ts";
@@ -66,11 +66,11 @@ export function layout(document: Document): Scene {
   const figure = union([
     ...placed.map(({ box }) => box),
     ...annotations.map(({ box }) => box),
-    ...lines.flatMap(({ from, to, control, labelBox }) => [
-      pointBox(from.point),
-      pointBox(to.point),
-      ...(control ? [pointBox(pointAt({ start: from.point, control, end: to.point }, 0.5))] : []),
-      ...(labelBox ? [labelBox] : []),
+    ...lines.flatMap((line) => [
+      pointBox(line.from.point),
+      pointBox(line.to.point),
+      ...(line.control ? [pointBox(pointAt(pathOf(line), 0.5))] : []),
+      ...(line.labelBox ? [line.labelBox] : []),
     ]),
   ]);
   const captions = placeCaptions(

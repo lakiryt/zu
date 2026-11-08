@@ -3,8 +3,9 @@
 import { ZuError } from "../errors.ts";
 import type { AnnotationKind, AnnotationStatement, Spot } from "../syntax/ast.ts";
 import { along, clip, direction, grow, overlapArea } from "./geometry.ts";
-import type { Box, Path, Point } from "./geometry.ts";
-import { crosses } from "./labels.ts";
+import type { Box, Point } from "./geometry.ts";
+import { CROSSING, cheapest, crosses } from "./labels.ts";
+import { pathOf } from "./lines.ts";
 import type { PlacedLine, ShapeFrame } from "./lines.ts";
 import { FONT_SIZE, measureText } from "./measure.ts";
 
@@ -58,9 +59,6 @@ const wayOf = ({ vertical, horizontal }: Spot): Way => ({
   h: horizontal === "left" ? -1 : horizontal === "right" ? 1 : 0,
 });
 
-// 線を横切る注釈の重さ。重なりの面積と比べる
-const CROSSING = 1000;
-
 export function placeAnnotations(
   statements: AnnotationStatement[],
   shapes: Map<string, ShapeFrame>,
@@ -71,7 +69,7 @@ export function placeAnnotations(
     ...[...shapes.values()].map(({ box }) => box),
     ...lines.flatMap(({ labelBox }) => (labelBox ? [labelBox] : [])),
   ];
-  const paths: Path[] = lines.map(({ from, to, control }) => ({ start: from.point, control, end: to.point }));
+  const paths = lines.map(pathOf);
   // 図形ごと、向きごとに、先に置いた注記(続けて並べるため)
   const stacks = new Map<string, Box>();
 
@@ -93,22 +91,12 @@ export function placeAnnotations(
     const ways = statement.spot ? [wayOf(statement.spot)] : ORDER[statement.annotation];
     const key = (way: Way) => `${statement.target}\u0000${statement.annotation}\u0000${way.v},${way.h}`;
     const candidates = ways.map((way) => ({ way, box: spotBox(frame, size, way, says, stacks.get(key(way)) ?? null) }));
-    const cost = (box: Box) => {
+    const best = cheapest(candidates, ({ box }) => {
       let total = 0;
       for (const other of obstacles) total += overlapArea(box, other);
       for (const path of paths) if (crosses(path, box)) total += CROSSING;
       return total;
-    };
-    let best = candidates[0]!;
-    let bestCost = Infinity;
-    for (const candidate of candidates) {
-      const value = cost(candidate.box);
-      if (value < bestCost) {
-        best = candidate;
-        bestCost = value;
-      }
-      if (bestCost === 0) break;
-    }
+    });
     obstacles.push(best.box);
     if (!says) stacks.set(key(best.way), best.box);
     return {

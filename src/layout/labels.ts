@@ -8,8 +8,8 @@ export const LABEL = { padX: 6, padY: 2, aside: 3, step: 16 };
 
 // 中点から少しずらして試す位置(通り道の t。線分なら長さに対する割合)
 const ALONG = [0.5, 0.4, 0.6, 0.3, 0.7];
-// 線を横切るラベルの重さ。重なりの面積と比べる
-const CROSSING = 1000;
+// 線を横切るラベル(や注釈)の重さ。重なりの面積と比べる
+export const CROSSING = 1000;
 // ほかの線が近くを通るラベルの重さと、その近さ。矢先がラベルを指しているように見えないよう、少し離す
 const CROWDED = 100;
 const ROOM = 8;
@@ -41,19 +41,25 @@ export function placeLabels(requests: LabelRequest[], obstacles: Box[], lines: P
       }
       return total;
     };
-    let best: Box | null = null;
-    let bestCost = Infinity;
-    for (const candidate of candidates(request, labelSize(request.label))) {
-      const value = cost(candidate);
-      if (value < bestCost) {
-        best = candidate;
-        bestCost = value;
-      }
-      if (bestCost === 0) break;
-    }
-    placed.push(best!);
+    const best = cheapest(candidates(request, labelSize(request.label)), cost);
+    placed.push(best);
     return best;
   });
+}
+
+// 試す順に並べた候補のうち、重さ(cost)が 0 の最初のもの。どれも重ければ、いちばん軽いもの(同じなら先のもの)
+export function cheapest<T>(candidates: T[], cost: (candidate: T) => number): T {
+  let best: T = candidates[0]!;
+  let bestCost = Infinity;
+  for (const candidate of candidates) {
+    const value = cost(candidate);
+    if (value < bestCost) {
+      best = candidate;
+      bestCost = value;
+    }
+    if (bestCost === 0) break;
+  }
+  return best;
 }
 
 // 試す場所の順: 線の上(中点。弧なら頂点。on のときだけ)、線の脇(side の側から)、もう一段外。

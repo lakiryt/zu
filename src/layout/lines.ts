@@ -183,6 +183,9 @@ export function placeLines(statements: LineStatement[], shapes: Map<string, Shap
   return result;
 }
 
+// 置いた線の通り道
+export const pathOf = ({ from, to, control }: PlacedLine): Path => ({ start: from.point, control, end: to.point });
+
 // 名前の重なり、ない図形や線を結ぶ誤り、線に向けられない端
 function check(statements: LineStatement[], shapes: Map<string, ShapeFrame>) {
   const names = new Set<string>();
@@ -206,8 +209,9 @@ function check(statements: LineStatement[], shapes: Map<string, ShapeFrame>) {
 // 線に向ける線の当て先。線の中点(弧なら頂点)を狙う。線がラベルの下地を通っていれば(ラベルが線の上にあれば)、
 // ラベルに当てる。当てる点を動かすのは、中点での接線の上(弧でも、間隔の分ならほとんど離れない)。
 // 端は手前で止め(ラベルの下地なら図形と同じ 6、線そのものなら線の中心から 10)、into なら触れさせる
-function lineTarget(id: string, { style, from, to, control, labelBox }: PlacedLine): Target {
-  const path = { start: from.point, control, end: to.point };
+function lineTarget(id: string, line: PlacedLine): Target {
+  const { style, from, to, labelBox } = line;
+  const path = pathOf(line);
   if (labelBox && crosses(path, labelBox)) {
     const anchor = { x: labelBox.x + labelBox.width / 2, y: labelBox.y + labelBox.height / 2 };
     return { id, anchor, body: labelBox, inner: labelBox, box: labelBox, margin: LINE.margin, touch: ONTO.label, along: null };
