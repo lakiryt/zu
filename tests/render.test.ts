@@ -375,10 +375,12 @@ test("bend left bulges to the left of the way, as seen walking from one end to t
 });
 
 test("a bent line keeps its label on the bulge, is not shifted aside, and is drawn as a curve", () => {
-  const scene = layout(parse('text a\ntext c right of a by 200\na ---> c\na ---> c "上" bend left'));
+  // 大きな立方体なら、2本の端は離れているので、端を離す決まりは働かない
+  const scene = layout(parse('cube a size large\ncube c right of a by 200 size large\na ---> c\na ---> c "上" bend left large'));
   const [straight, bent] = scene.lines;
   // まっすぐな線は1本だけなので、ずらさない
   close(straight!.from.point.y, scene.shapes[0]!.anchor.y);
+  close(straight!.to.point.y, scene.shapes[1]!.anchor.y);
   // ラベルは弧の頂点(線の上)
   const { from, to, control } = bent!;
   const apex = { x: (from.point.x + 2 * control!.x + to.point.x) / 4, y: (from.point.y + 2 * control!.y + to.point.y) / 4 };
@@ -388,6 +390,23 @@ test("a bent line keeps its label on the bulge, is not shifted aside, and is dra
   // 図の範囲は弧の頂点を含む
   assert.ok(box.y >= PADDING - 1e-9);
   assert.match(render('text a\ntext c right of a by 200\na ===> c bend left'), /<path d="M[^"]+ Q[^"]+"[^>]*\/>.*<path d="M/);
+});
+
+test("ends arriving at one shape from close directions are kept apart, so the arrows stay separate", () => {
+  const scene = layout(parse("text p\ntext q right of p by 200\ntext r below p by 60\np ---> q\nr ---> q bend left"));
+  const [first, second] = scene.lines;
+  const gap = Math.hypot(first!.to.point.x - second!.to.point.x, first!.to.point.y - second!.to.point.y);
+  assert.ok(gap >= 14 - 1e-9, `矢先の間が ${gap}`);
+  // 小さな図形に多く来ても、枠を広げて離す
+  const crowd = layout(
+    parse("text q\ntext a at -200 -60\ntext b at -200 -20\ntext c at -200 20\ntext d at -200 60\ntext e at -200 0\na ---> q\nb ---> q\nc ---> q\nd ---> q\ne ---> q"),
+  );
+  const tips = crowd.lines.map(({ to }) => to.point);
+  for (let i = 0; i < tips.length; i++) {
+    for (let j = i + 1; j < tips.length; j++) {
+      assert.ok(Math.hypot(tips[i]!.x - tips[j]!.x, tips[i]!.y - tips[j]!.y) >= 10, `${i} と ${j} が近い`);
+    }
+  }
 });
 
 test("lines pointed at lines do not widen the gap between shapes", () => {

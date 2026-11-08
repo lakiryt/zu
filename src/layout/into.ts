@@ -30,17 +30,56 @@ export function tipInside(inner: Box, aim: Point, other: Point): Point {
   return along(other, d, Math.min(span, entered));
 }
 
-// 同じ図形に刺さる端を、互いに spacing 以上離す。deep の縁をたどって並べ直す
+// 同じ図形に刺さる端を、互いに spacing 以上離す。deep の縁をたどって並べ直す。
+// 角をまたぐと縁をたどる長さより実際の間が狭まる(最も狭くて 1/√2)ので、その分広く取る
 export function spreadTips(inner: Box, tips: Point[]): Point[] {
-  if (tips.length < 2) return tips;
-  const ring = deepOf(inner);
+  return spreadOnRing(deepOf(inner), tips, INTO.spacing * Math.SQRT2);
+}
+
+// 枠(ring)の縁の上の点を、縁をたどる長さで互いに spacing 以上離す。近すぎないものは動かさない
+export function spreadOnRing(ring: Box, points: Point[], spacing: number): Point[] {
+  if (points.length < 2) return points;
   const lengths = spreadAround(
-    tips.map((tip) => lengthAround(ring, tip)),
-    // 角をまたぐと縁をたどる長さより実際の間が狭まる(最も狭くて 1/√2)ので、その分広く取る
-    INTO.spacing * Math.SQRT2,
+    points.map((point) => lengthAround(ring, point)),
+    spacing,
     2 * (ring.width + ring.height),
   );
   return lengths.map((length) => pointAround(ring, length));
+}
+
+// 動かさない点(fixed)は置いたままにし、動かす点(movable)を、ほかの点から縁をたどる長さで spacing 以上離れた、
+// 元の位置にいちばん近い所へ順に置く。どこも空いていなければ、ほかの点からいちばん離れた所に置く
+export function avoidOnRing(ring: Box, fixed: Point[], movable: Point[], spacing: number): Point[] {
+  const total = 2 * (ring.width + ring.height);
+  if (total <= 0) return movable;
+  const taken = fixed.map((point) => lengthAround(ring, point));
+  const apart = (s: number) =>
+    Math.min(Infinity, ...taken.map((t) => {
+      const d = Math.abs((((s - t) % total) + total) % total);
+      return Math.min(d, total - d);
+    }));
+  const step = 0.5;
+  return movable.map((point) => {
+    const origin = lengthAround(ring, point);
+    let best = origin;
+    let bestApart = apart(origin);
+    for (let d = 0; d <= total / 2 && bestApart < spacing; d += step) {
+      for (const s of [origin + d, origin - d]) {
+        const value = apart(s);
+        if (value >= spacing) {
+          best = s;
+          bestApart = value;
+          break;
+        }
+        if (value > bestApart) {
+          best = s;
+          bestApart = value;
+        }
+      }
+    }
+    taken.push(best);
+    return pointAround(ring, best);
+  });
 }
 
 // 枠の縁を左上から時計回りにたどった長さと、縁の上の点との行き来

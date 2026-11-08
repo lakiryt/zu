@@ -3,7 +3,7 @@ import { ZuError } from "../errors.ts";
 import type { Bend, Head, LineStatement, LineStyle, Scale } from "../syntax/ast.ts";
 import { along, clip, contains, direction, distance, grow, pointAt, subPath, tangentAt } from "./geometry.ts";
 import type { Box, Path, Point } from "./geometry.ts";
-import { aimInside, spreadTips, tipInside } from "./into.ts";
+import { aimInside, avoidOnRing, spreadOnRing, spreadTips, tipInside } from "./into.ts";
 import { LABEL, crosses, labelSize, placeLabels } from "./labels.ts";
 
 // 線の端。id はつないだ図形か線。point は線の端の位置(図形の本体の手前か、中まで伸ばした所)
@@ -26,8 +26,9 @@ export type PlacedLine = {
 // 線を結ぶ図形の枠。anchor は本体の中心、body は線を切る本体の枠、inner は中まで伸ばす端を置いてよい枠、box は外枠
 export type ShapeFrame = { id: string; anchor: Point; body: Box; inner: Box; box: Box };
 
-// 線の端と図形の本体の間、同じ2つの図形を結ぶ線どうしの間隔、ラベルと矢先の間
-const LINE = { margin: 6, spacing: 16, clearance: 10 };
+// 線の端と図形の本体の間、同じ2つの図形を結ぶ線どうしの間隔、ラベルと矢先の間。
+// apart は同じ図形に来る端どうしの最小の間(矢先どうしが離れて、別々の線に見えるよう)
+const LINE = { margin: 6, spacing: 16, clearance: 10, apart: 14 };
 // 線に向けた線の端と、向けた先のラベルの下地や線との間(二重線は2本の外側で止める)。
 // 同じ線に当てる端どうしの間隔。shallow は、線に浅く当たるときに止める長さを抑える角度の正弦
 const ONTO = { label: 1, line: 1.5, double: 3, spacing: 12, shallow: 0.3 };
@@ -101,6 +102,8 @@ type Draft = {
   frames: [Target, Target];
   aims: [Point, Point];
   tips: [Point | null, Point | null];
+  // 同じ図形に来るほかの端から離すために決めた端の位置(中まで伸ばさない端)
+  ends: [Point | null, Point | null];
   // 同じ組の線をずらす向き(名前の順で決める)と、ずらした量
   normal: Point;
   offset: number;
@@ -131,7 +134,8 @@ export function placeLines(statements: LineStatement[], shapes: Map<string, Shap
     );
     spreadAllTips(drafts);
     spreadOnLines(drafts);
-    const segments = drafts.map(cut);
+    let segments = drafts.map(cut);
+    if (separateEnds(drafts, segments)) segments = drafts.map(cut);
 
     obstacles.push(...segments.flatMap(headBoxes));
     const labelBoxes = placeLabels(
@@ -259,7 +263,7 @@ function draftLines(statements: LineStatement[], frames: Map<string, Target>): D
       statement.from.into ? tipInside(a.inner, aims[0], control ?? aims[1]) : null,
       statement.to.into ? tipInside(b.inner, aims[1], control ?? aims[0]) : null,
     ];
-    return { statement, frames: [a, b], aims, tips, normal, offset };
+    return { statement, frames: [a, b], aims, tips, ends: [null, null], normal, offset };
   });
 }
 
@@ -305,20 +309,22 @@ function spreadOnLines(drafts: Draft[]) {
   }
 }
 
-// 3. 線の両端を決める。中まで伸ばす端はその点、ほかの端は本体の手前で切る
+// 3. 線の両端を決める。中まで伸ばす端と、ほかの端から離した端はその点、ほかの端は本体の手前で切る。
+//    曲げた線のふくらみは、本体の中心(向かう点)どうしで決める
 function cut(draft: Draft): Segment {
-  const { statement, aims, tips, normal, offset } = draft;
-  const p = tips[0] ?? aims[0];
-  const q = tips[1] ?? aims[1];
-  const control = controlFor(p, q, statement.bend);
+  const { statement, aims, tips, ends, normal, offset } = draft;
+  const fixed = [tips[0] ?? ends[0], tips[1] ?? ends[1]] as const;
+  const p = fixed[0] ?? aims[0];
+  const q = fixed[1] ?? aims[1];
+  const control = controlFor(tips[0] ?? aims[0], tips[1] ?? aims[1], statement.bend);
   if (control) {
     // ラベルを脇に置くなら、ふくらんだ外側を先に試す。脇の向きは (-u.y, u.x) が 1 で、左へのふくらみはその逆
     const side = statement.bend!.side === "left" ? -1 : 1;
     return { statement, path: cutCurve(draft, { start: p, control, end: q }), side };
   }
   const d = direction(p, q);
-  const fromStart = tips[0] ? 0 : leave(draft.frames[0], p, d);
-  const fromEnd = tips[1] ? 0 : leave(draft.frames[1], q, { x: -d.x, y: -d.y });
+  const fromStart = fixed[0] ? 0 : leave(draft.frames[0], p, d);
+  const fromEnd = fixed[1] ? 0 : leave(draft.frames[1], q, { x: -d.x, y: -d.y });
   // 図形が重なっていて切ると線が残らないときは、向かう点どうしを結ぶ
   const [start, end] =
     fromStart + fromEnd < distance(p, q) ? [along(p, d, fromStart), along(q, d, -fromEnd)] : [p, q];
@@ -327,6 +333,44 @@ function cut(draft: Draft): Segment {
   const towards = Math.sign(offset) || 1;
   const side = towards * (Math.sign(-d.y * normal.x + d.x * normal.y) || 1);
   return { statement, path: { start, control: null, end }, side };
+}
+
+// 4. 同じ図形に来る端(中まで伸ばす端を除く)が近すぎれば、本体の手前の枠の縁に沿って離す。
+//    まっすぐな線の端はなるべく動かさず(線が傾かないよう)、曲げた線の端を空いた所へずらす。
+//    離した端は ends に決め、線を引き直す。並べきれない小さな図形では、枠を広げて並べる。動かす端があれば true
+function separateEnds(drafts: Draft[], segments: Segment[]) {
+  type Arrival = { draft: Draft; side: 0 | 1; point: Point };
+  const byShape = new Map<Target, Arrival[]>();
+  drafts.forEach((draft, index) => {
+    const { path } = segments[index]!;
+    for (const side of [0, 1] as const) {
+      const frame = draft.frames[side];
+      if (frame.along || draft.tips[side]) continue;
+      const point = side === 0 ? path.start : path.end;
+      byShape.set(frame, [...(byShape.get(frame) ?? []), { draft, side, point }]);
+    }
+  });
+  let moved = false;
+  for (const [frame, arriving] of byShape) {
+    if (arriving.length < 2) continue;
+    let ring = grow(frame.body, frame.margin);
+    const shortage = arriving.length * LINE.apart - 2 * (ring.width + ring.height);
+    if (shortage > 0) ring = grow(ring, shortage / 8);
+    const straight = arriving.filter(({ draft }) => draft.statement.bend === null);
+    const bent = arriving.filter(({ draft }) => draft.statement.bend !== null);
+    // まっすぐな線どうしが近ければ互いに離し、曲げた線はそれを避けて置く
+    const placedStraight = spreadOnRing(ring, straight.map(({ point }) => point), LINE.apart);
+    const placedBent = avoidOnRing(ring, placedStraight, bent.map(({ point }) => point), LINE.apart);
+    const placed = new Map<Arrival, Point>([
+      ...straight.map((arrival, index) => [arrival, placedStraight[index]!] as const),
+      ...bent.map((arrival, index) => [arrival, placedBent[index]!] as const),
+    ]);
+    if (shortage <= 0 && arriving.every((arrival) => distance(placed.get(arrival)!, arrival.point) < 1e-6)) continue;
+    moved = true;
+    // 動かない端も決めておく(引き直したとき、ほかの端に合わせて動かないよう)
+    for (const arrival of arriving) arrival.draft.ends[arrival.side] = placed.get(arrival)!;
+  }
+  return moved;
 }
 
 // 向かう点 from から toward の向きへ、本体(に余白を足した枠)の外へ出るまでの長さ。
@@ -339,10 +383,10 @@ function leave(frame: Target, from: Point, toward: Point) {
   return clip(from, toward, grow(frame.body, frame.margin))?.[1] ?? 0;
 }
 
-// 曲げた線を、両端の本体の手前で切る
-function cutCurve({ frames, tips }: Draft, path: Path): Path {
-  const t0 = tips[0] ? 0 : leaveCurve(frames[0], path, false);
-  const t1 = tips[1] ? 1 : 1 - leaveCurve(frames[1], path, true);
+// 曲げた線を、両端の本体の手前で切る(中まで伸ばす端と、ほかの端から離した端は切らない)
+function cutCurve({ frames, tips, ends }: Draft, path: Path): Path {
+  const t0 = tips[0] || ends[0] ? 0 : leaveCurve(frames[0], path, false);
+  const t1 = tips[1] || ends[1] ? 1 : 1 - leaveCurve(frames[1], path, true);
   // 図形が重なっていて切ると線が残らないときは、向かう点どうしを結ぶ
   return t0 < t1 ? subPath(path, t0, t1) : path;
 }
