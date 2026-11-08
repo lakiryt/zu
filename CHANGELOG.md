@@ -4,6 +4,8 @@ zu(言語とライブラリ)の版ごとの変更。版の付け方は [docs/des
 
 ## 未公開
 
+## 0.4.0 (2026-11-08)
+
 ### 互換を壊す変更
 
 - 構文木: `LineStatement` に線の名前 `id`(`string | null`)と曲げ方 `bend`(`Bend | null`)を足した。構文木を自分で組み立てるなら `id: null, bend: null` を添える
