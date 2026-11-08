@@ -201,12 +201,9 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
           change({ ...statement, [side]: { ...end, head } }),
         ),
       );
-      // 中まで伸ばせるのは図形の側だけ
-      if (edit.findShape(document, end.id)) {
-        panel.append(
-          checkbox("図形の中まで伸ばす", end.into, (into) => change({ ...statement, [side]: { ...end, into } })),
-        );
-      }
+      // 図形の側なら中まで伸ばし、線の側なら触れさせる
+      const intoName = edit.findShape(document, end.id) ? "図形の中まで伸ばす" : "線に触れさせる";
+      panel.append(checkbox(intoName, end.into, (into) => change({ ...statement, [side]: { ...end, into } })));
     }
     panel.append(
       html(

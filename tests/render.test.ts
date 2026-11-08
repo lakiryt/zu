@@ -318,14 +318,17 @@ test("a cube or parallelogram without a label draws none, and a cube shrinks to 
 });
 
 test("a line pointed at a named line stops at its label when the label sits on it", () => {
-  const scene = layout(parse('text b\ntext c right of b by 200\ntext x above b\nb ---> c "詐害行為" on as f\nx ---> f "取消"'));
-  const [f, onto] = scene.lines;
+  const source = 'text b\ntext c right of b by 200\ntext x above b\nb ---> c "詐害行為" on as f\nx ---> f "取消"';
+  const [f, onto] = layout(parse(`${source} into f`)).lines;
   assert.equal(f!.id, "f");
   assert.equal(onto!.to.id, "f");
   const label = f!.labelBox!;
-  // x は左上から来るので、下地の上の縁の 1 手前で止まる
+  // x は左上から来るので、into なら下地の上の縁の 1 手前で止まる
   assert.ok(onto!.to.point.x > label.x && onto!.to.point.x < label.x + label.width);
   close(onto!.to.point.y, label.y - 1);
+  // into がなければ、図形と同じく 6 手前で止まる
+  const [, short] = layout(parse(source)).lines;
+  close(short!.to.point.y, label.y - 6);
 });
 
 test("a label sits beside its line by default: above a level line, right of an upright one, away from later lines", () => {
@@ -344,14 +347,19 @@ test("a label sits beside its line by default: above a level line, right of an u
   close(on.labelBox!.y + on.labelBox!.height / 2, on.from.point.y);
 });
 
-test("a line pointed at an unlabelled line touches its middle, and ends on one line are spread apart", () => {
+test("a line pointed at an unlabelled line touches its middle with into, and ends on one line are spread apart", () => {
   const scene = layout(
-    parse("text p\ntext q right of p by 200\np --- q as g\ntext r below p by 80\ntext s below q by 80\nr ---> g\ns ---> g"),
+    parse("text p\ntext q right of p by 200\np --- q as g\ntext r below p by 80\ntext s below q by 80\nr ---> g into g\ns ---> g into g"),
   );
   const [g, fromR, fromS] = scene.lines;
   const y = g!.from.point.y;
   close(fromR!.to.point.y, y + 1.5);
   close(fromS!.to.point.y, y + 1.5);
+  // into がなければ触れずに 6 手前で止まる。二重線へ into なら、2本の間まで入る
+  const apart = layout(parse("text p\ntext q right of p by 200\np === q as g\ntext r below p by 80\nr ---> g")).lines[1]!;
+  close(apart.to.point.y, y + 6);
+  const inside = layout(parse("text p\ntext q right of p by 200\np === q as g\ntext r below p by 80\nr ---> g into g")).lines[1]!;
+  close(inside.to.point.y, y);
   // 中点の両側に、r の側が左になるよう 12 以上離れる
   const middle = (g!.from.point.x + g!.to.point.x) / 2;
   assert.ok(fromS!.to.point.x - fromR!.to.point.x >= 12);
@@ -362,7 +370,6 @@ test("lines pointed at lines report what cannot be done", () => {
   fails("text a\ntext b\na --- b as a", 3, /「a」という名前の図形がすでにあります/);
   fails("text a\ntext b\na --- b as f\nb --- a as f", 4, /「f」という名前の線がすでにあります/);
   fails("text a\ntext b\na --- b as f\na --- g as g", 4, /線をその線自身に向けることはできません/);
-  fails("text a\ntext b\na --- b as f\na ---o f into f", 4, /「f」は線なので、中まで伸ばせません/);
   fails("text a\ntext b\na --- g as f\na --- f as g", 3, /線の向ける先が循環しています/);
   fails("text a\ntext b\na --- b as f\ntext c below f", 4, /「f」は線です\(置き方の基準には図形を書きます\)/);
   fails("text a\ntext b\na --- b as f\nalign row a f", 4, /「f」は線です\(揃えには図形を書きます\)/);

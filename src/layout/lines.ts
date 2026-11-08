@@ -32,16 +32,16 @@ export type ShapeFrame = { id: string; anchor: Point; body: Box; inner: Box; box
 // approach は、曲げた線がどちらの側から入ってくるかを見る、端からさかのぼる長さ
 // focus は、離した曲げた線の端を向ける点の、端からの奥行き(図形の中心より奥の点へ向け、矢先が図形のほうへ寄るように)
 const LINE = { margin: 6, spacing: 16, clearance: 10, apart: 14, approach: 30, focus: 40 };
-// 線に向けた線の端と、向けた先のラベルの下地や線との間(二重線は2本の外側で止める)。
-// 同じ線に当てる端どうしの間隔。shallow は、線に浅く当たるときに止める長さを抑える角度の正弦
 // 縦向きとみなす線の傾き(向きの横の成分がこれより小さい)
 const UPRIGHT = 0.3;
-const ONTO = { label: 1, line: 1.5, double: 3, spacing: 12, shallow: 0.3 };
+// 線に向けた線を into で触れさせるときの、向けた先のラベルの下地や線との間(二重線は2本の間まで入る)。
+// 同じ線に当てる端どうしの間隔。shallow は、線に浅く当たるときに止める長さを抑える角度の正弦
+const ONTO = { label: 1, line: 1.5, double: 0, spacing: 12, shallow: 0.3 };
 
 // 線を向ける先。図形か、名前を付けた線。線なら anchor は当てる点、body は当てる枠(ラベルの下地か、大きさのない点)。
-// margin は線の端を body のどれだけ手前で止めるか。
+// margin は線の端を body のどれだけ手前で止めるか。touch は線に向けた端を into で触れさせるときの margin(図形なら null)。
 // along は線そのものに当てるときのその線(anchor を通る向き u、長さ length)。当てる点はこの線の上で動かす
-type Target = ShapeFrame & { margin: number; along: { u: Point; length: number } | null };
+type Target = ShapeFrame & { margin: number; touch: number | null; along: { u: Point; length: number } | null };
 
 // 曲げた線が、端で弦(両端を結ぶ線分)となす角(度)。大きさの語ごと
 const BEND_ANGLES: Record<Scale, number> = { small: 15, medium: 30, large: 45 };
@@ -121,7 +121,7 @@ type Segment = { statement: LineStatement; path: Path; side: number };
 export function placeLines(statements: LineStatement[], shapes: Map<string, ShapeFrame>): PlacedLine[] {
   check(statements, shapes);
   const targets = new Map<string, Target>(
-    [...shapes].map(([id, frame]) => [id, { ...frame, margin: LINE.margin, along: null }]),
+    [...shapes].map(([id, frame]) => [id, { ...frame, margin: LINE.margin, touch: null, along: null }]),
   );
   const result: PlacedLine[] = [];
   // ラベルが避けるもの。図形、矢先、先に置いたラベルと線
@@ -195,7 +195,6 @@ function check(statements: LineStatement[], shapes: Map<string, ShapeFrame>) {
     for (const end of [statement.from, statement.to]) {
       if (!shapes.has(end.id) && !names.has(end.id)) throw new ZuError(`「${end.id}」という図形や線はありません`, end.at);
       if (end.id === statement.id) throw new ZuError("線をその線自身に向けることはできません", end.at);
-      if (end.into && names.has(end.id)) throw new ZuError(`「${end.id}」は線なので、中まで伸ばせません`, end.at);
     }
     if (statement.from.id === statement.to.id) {
       throw new ZuError("同じ図形どうしは線で結べません", statement.to.at);
@@ -204,19 +203,20 @@ function check(statements: LineStatement[], shapes: Map<string, ShapeFrame>) {
 }
 
 // 線に向ける線の当て先。線の中点(弧なら頂点)を狙う。線がラベルの下地を通っていれば(ラベルが線の上にあれば)、
-// ラベルに当てる。当てる点を動かすのは、中点での接線の上(弧でも、間隔の分ならほとんど離れない)
+// ラベルに当てる。当てる点を動かすのは、中点での接線の上(弧でも、間隔の分ならほとんど離れない)。
+// 端は図形と同じく手前(6)で止め、into なら触れさせる
 function lineTarget(id: string, { style, from, to, control, labelBox }: PlacedLine): Target {
   const path = { start: from.point, control, end: to.point };
   if (labelBox && crosses(path, labelBox)) {
     const anchor = { x: labelBox.x + labelBox.width / 2, y: labelBox.y + labelBox.height / 2 };
-    return { id, anchor, body: labelBox, inner: labelBox, box: labelBox, margin: ONTO.label, along: null };
+    return { id, anchor, body: labelBox, inner: labelBox, box: labelBox, margin: LINE.margin, touch: ONTO.label, along: null };
   }
   const u = tangentAt(path, 0.5);
   const length = distance(from.point, to.point);
   const middle = pointAt(path, 0.5);
   const point = { ...middle, width: 0, height: 0 };
-  const margin = style === "double" ? ONTO.double : ONTO.line;
-  return { id, anchor: middle, body: point, inner: point, box: point, margin, along: { u, length } };
+  const touch = style === "double" ? ONTO.double : ONTO.line;
+  return { id, anchor: middle, body: point, inner: point, box: point, margin: LINE.margin, touch, along: { u, length } };
 }
 
 // 線そのものに当てる端の、当てる点の位置(当てる線の中点から、線に沿って測った長さ)
@@ -271,14 +271,14 @@ function draftLines(statements: LineStatement[], frames: Map<string, Target>): D
     const aim = (frame: Target, into: boolean) => {
       const point = along(frame.anchor, normal, offset);
       if (frame.along) return pointOn(frame, positionOn(frame, point));
-      return into ? aimInside(point, frame.inner) : point;
+      return into && frame.touch === null ? aimInside(point, frame.inner) : point;
     };
     const aims: [Point, Point] = [aim(a, statement.from.into), aim(b, statement.to.into)];
     // 中まで伸ばす端は、線が入ってくる向きで決める。曲げた線は制御点の側から入る
     const control = controlFor(aims[0], aims[1], statement.bend);
     const tips: Draft["tips"] = [
-      statement.from.into ? tipInside(a.inner, aims[0], control ?? aims[1]) : null,
-      statement.to.into ? tipInside(b.inner, aims[1], control ?? aims[0]) : null,
+      statement.from.into && a.touch === null ? tipInside(a.inner, aims[0], control ?? aims[1]) : null,
+      statement.to.into && b.touch === null ? tipInside(b.inner, aims[1], control ?? aims[0]) : null,
     ];
     return { statement, frames: [a, b], aims, tips, ends: [null, null], normal, offset };
   });
@@ -342,8 +342,8 @@ function cut(draft: Draft): Segment {
     return { statement, path: cutCurve(draft, reaim(draft, original, p, q)), side };
   }
   const d = direction(p, q);
-  const fromStart = fixed[0] ? 0 : leave(draft.frames[0], p, d);
-  const fromEnd = fixed[1] ? 0 : leave(draft.frames[1], q, { x: -d.x, y: -d.y });
+  const fromStart = fixed[0] ? 0 : leave(draft.frames[0], p, d, marginAt(draft, 0));
+  const fromEnd = fixed[1] ? 0 : leave(draft.frames[1], q, { x: -d.x, y: -d.y }, marginAt(draft, 1));
   // 図形が重なっていて切ると線が残らないときは、向かう点どうしを結ぶ
   const [start, end] =
     fromStart + fromEnd < distance(p, q) ? [along(p, d, fromStart), along(q, d, -fromEnd)] : [p, q];
@@ -401,14 +401,21 @@ function separateEnds(drafts: Draft[], segments: Segment[]) {
   return moved;
 }
 
-// 向かう点 from から toward の向きへ、本体(に余白を足した枠)の外へ出るまでの長さ。
+// 端を本体のどれだけ手前で止めるか。線に向けた端は、into なら触れさせる
+function marginAt({ statement, frames }: Draft, side: 0 | 1) {
+  const frame = frames[side];
+  const into = side === 0 ? statement.from.into : statement.to.into;
+  return into && frame.touch !== null ? frame.touch : frame.margin;
+}
+
+// 向かう点 from から toward の向きへ、本体(に余白 margin を足した枠)の外へ出るまでの長さ。
 // 線そのものに当てる端は、その線から margin 離れるまでの長さ(浅く当たっても離れすぎないよう、角度は抑える)
-function leave(frame: Target, from: Point, toward: Point) {
+function leave(frame: Target, from: Point, toward: Point, margin: number) {
   if (frame.along) {
     const sine = Math.abs(toward.x * frame.along.u.y - toward.y * frame.along.u.x);
-    return frame.margin / Math.max(sine, ONTO.shallow);
+    return margin / Math.max(sine, ONTO.shallow);
   }
-  return clip(from, toward, grow(frame.body, frame.margin))?.[1] ?? 0;
+  return clip(from, toward, grow(frame.body, margin))?.[1] ?? 0;
 }
 
 // 曲げた線の端をほかの端から離した(ends)とき、弧を新しい端 p、q に合わせて曲げ直す。
@@ -449,23 +456,24 @@ function reaim({ frames, ends, statement }: Draft, original: Path & { control: P
 }
 
 // 曲げた線を、両端の本体の手前で切る(中まで伸ばす端と、ほかの端から離した端は切らない)
-function cutCurve({ frames, tips, ends }: Draft, path: Path): Path {
-  const t0 = tips[0] || ends[0] ? 0 : leaveCurve(frames[0], path, false);
-  const t1 = tips[1] || ends[1] ? 1 : 1 - leaveCurve(frames[1], path, true);
+function cutCurve(draft: Draft, path: Path): Path {
+  const { frames, tips, ends } = draft;
+  const t0 = tips[0] || ends[0] ? 0 : leaveCurve(frames[0], path, false, marginAt(draft, 0));
+  const t1 = tips[1] || ends[1] ? 1 : 1 - leaveCurve(frames[1], path, true, marginAt(draft, 1));
   // 図形が重なっていて切ると線が残らないときは、向かう点どうしを結ぶ
   return t0 < t1 ? subPath(path, t0, t1) : path;
 }
 
 // 端(fromEnd なら end)から本体の外へ出るまでの、t の幅
-function leaveCurve(frame: Target, path: Path, fromEnd: boolean) {
+function leaveCurve(frame: Target, path: Path, fromEnd: boolean, margin: number) {
   const point = (t: number) => pointAt(path, fromEnd ? 1 - t : t);
   if (frame.along) {
     // 端の近くの弧はほぼまっすぐなので、まっすぐな線と同じ長さを、端での速さ(t あたりの長さ)で t に直す
     const u = tangentAt(path, fromEnd ? 1 : 0);
     const speed = 2 * (fromEnd ? distance(path.control!, path.end) : distance(path.start, path.control!));
-    return speed === 0 ? 0 : Math.min(leave(frame, point(0), u) / speed, 0.5);
+    return speed === 0 ? 0 : Math.min(leave(frame, point(0), u, margin) / speed, 0.5);
   }
-  const box = grow(frame.body, frame.margin);
+  const box = grow(frame.body, margin);
   if (!contains(box, point(0))) return 0;
   // 外へ出る最初の t を、細かく刻んで見つけてから二分法で詰める
   const steps = 64;
