@@ -335,6 +335,8 @@ test("a label sits beside its line by default: above a level line, right of an u
   const level = layout(parse('text a\ntext b right of a by 200\na ---> b "α"')).lines[0]!;
   const box = level.labelBox!;
   assert.ok(box.y + box.height < level.from.point.y, "横向きの線のラベルは上");
+  // 脇のラベルの下地は字にほぼぴったりで、線から 3 の所に置く(線に重ねるときより小さい)
+  close(box.y + box.height, level.from.point.y - 3);
   close(box.x + box.width / 2, (level.from.point.x + level.to.point.x) / 2);
   const upright = layout(parse('text a\ntext b below a by 120\nb ---> a "α"')).lines[0]!;
   assert.ok(upright.labelBox!.x > upright.from.point.x, "縦向きの線のラベルは右");
@@ -345,6 +347,7 @@ test("a label sits beside its line by default: above a level line, right of an u
   // on なら線に重ねる
   const on = layout(parse('text a\ntext b right of a by 200\na ---> b "α" on')).lines[0]!;
   close(on.labelBox!.y + on.labelBox!.height / 2, on.from.point.y);
+  assert.ok(on.labelBox!.height > box.height && on.labelBox!.width > box.width);
 });
 
 test("a line pointed at an unlabelled line touches its middle with into, and ends on one line are spread apart", () => {

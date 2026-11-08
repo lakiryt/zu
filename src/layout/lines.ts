@@ -1,7 +1,7 @@
 // 線の両端の位置とラベルの場所を決める。図形の位置には、ラベルの入る間(roomFor)を通してだけ影響する
 import { ZuError } from "../errors.ts";
 import type { Bend, Head, LineStatement, LineStyle, Scale } from "../syntax/ast.ts";
-import { along, clip, contains, direction, distance, grow, pointAt, subPath, tangentAt } from "./geometry.ts";
+import { along, clip, contains, direction, distance, grow, pointAt, subPath, tangentAt, union } from "./geometry.ts";
 import type { Box, Path, Point } from "./geometry.ts";
 import { aimInside, arrangeOnRing, spreadOnRing, spreadTips, tipInside } from "./into.ts";
 import { LABEL, crosses, labelSize, placeLabels } from "./labels.ts";
@@ -236,14 +236,27 @@ function pointOn(frame: Target, t: number) {
 
 // 矢先の占める枠。ラベルはこれを避ける
 function headBoxes({ statement, path }: Segment) {
+  const into = tangentAt(path, 1);
+  const out = tangentAt(path, 0);
   return (
     [
-      [path.start, statement.from.head],
-      [path.end, statement.to.head],
+      [path.start, { x: -out.x, y: -out.y }, statement.from.head],
+      [path.end, into, statement.to.head],
     ] as const
   )
-    .filter(([, head]) => head !== "none")
-    .map(([point, head]) => grow({ ...point, width: 0, height: 0 }, headLength(head, statement.style)));
+    .filter(([, , head]) => head !== "none")
+    .map(([tip, u, head]) => headBox(tip, u, head, statement.style));
+}
+
+// tip に向かう向き u の矢先が占める枠(描く段と同じ形。線の太さの分だけ広げる)
+function headBox(tip: Point, u: Point, head: Head, style: LineStyle): Box {
+  const scale = headScale(style);
+  const dot = (point: Point) => ({ ...point, width: 0, height: 0 });
+  if (head === "dot") return grow(dot(along(tip, u, -HEAD.radius * scale)), HEAD.radius * scale + 1);
+  const base = along(tip, u, -HEAD.length * scale);
+  const n = { x: -u.y, y: u.x };
+  const half = (HEAD.width * scale) / 2;
+  return grow(union([tip, along(base, n, half), along(base, n, -half)].map(dot))!, 1);
 }
 
 // 1. 本体の中心(線なら当てる点)どうしを結ぶ。同じ2つを結ぶまっすぐな線は、平行にずらして重ならないようにする。

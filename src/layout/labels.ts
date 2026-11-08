@@ -1,10 +1,11 @@
 // 線のラベルの置き場所。図形、矢先、ほかの線、先に置いたラベルに重ならない場所を、線の中点の近くから探す
 import { along, clip, grow, overlapArea, pointAt, polyline, tangentAt } from "./geometry.ts";
 import type { Box, Path, Point } from "./geometry.ts";
-import { measureText } from "./measure.ts";
+import { FONT_SIZE, LINE_HEIGHT, measureText } from "./measure.ts";
 
-// ラベルの下地の余白、ラベルを線の脇に置くときの線からの離れ、さらに外に置くときの一段の幅
-export const LABEL = { padX: 6, padY: 2, aside: 3, step: 16 };
+// ラベルの下地の余白(線に重ねるとき)、ラベルを線の脇に置くときの線からの離れ、さらに外に置くときの一段の幅、
+// 脇に置くラベルの下地の余白(字にほぼぴったり。線との対応が分かるよう近づける。字の左右は上下より詰まって見えるので少し広く)
+export const LABEL = { padX: 6, padY: 2, aside: 3, step: 16, snugX: 3, snugY: 1 };
 
 // 中点から少しずらして試す位置(通り道の t。線分なら長さに対する割合)
 const ALONG = [0.5, 0.4, 0.6, 0.3, 0.7];
@@ -14,9 +15,13 @@ export const CROSSING = 1000;
 const CROWDED = 100;
 const ROOM = 8;
 
-export function labelSize(label: string) {
+// ラベルの下地の大きさ。線に重ねるなら線が途切れて見えるよう余白を取る。
+// 脇に置くなら、行の上下の空き(行の高さのうち字の大きさを超える分)も除いて、字にほぼぴったりにする
+export function labelSize(label: string, on = true) {
   const text = measureText(label);
-  return { width: text.width + LABEL.padX * 2, height: text.height + LABEL.padY * 2 };
+  if (on) return { width: text.width + LABEL.padX * 2, height: text.height + LABEL.padY * 2 };
+  const leading = FONT_SIZE * (LINE_HEIGHT - 1);
+  return { width: text.width + LABEL.snugX * 2, height: text.height - leading + LABEL.snugY * 2 };
 }
 
 // path は線の通り道。side はラベルを線の脇に置くとき先に試す向き((-u.y, u.x) の側が 1、逆が -1)。
@@ -41,7 +46,7 @@ export function placeLabels(requests: LabelRequest[], obstacles: Box[], lines: P
       }
       return total;
     };
-    const best = cheapest(candidates(request, labelSize(request.label)), cost);
+    const best = cheapest(candidates(request, labelSize(request.label, request.on)), cost);
     placed.push(best);
     return best;
   });
