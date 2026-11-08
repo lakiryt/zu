@@ -32,6 +32,7 @@ npm run build        # editor/dist に書き出す(Vercel はこれを出す)
 - 実行時の依存パッケージを足さない(エディタも含む。Vite は開発用)。Node 24 で .ts をそのまま動かす(`erasableSyntaxOnly` に収まる書き方にする)。`src/` の import は `.ts` を付けて書く(ライブラリのビルドで `.js` に書き換わる)
 - 言語の語(図形の名前、キーワード)は特定の分野に寄せない。法律の図にも使うが、`text`、`cube` のように見た目で名付ける
 - 文法や意味を変えたら SPEC.md も直す。例(`examples/`)の SVG も出し直す
+- 書き方、見た目、公開するものを変えたら、CHANGELOG.md の「未公開」に書き足す(互換を壊すなら印を付けて直し方を添える)。版の付け方と出し方は [docs/design/versioning.md](docs/design/versioning.md)
 - 誤りの文言、コメント、文書は日本語
 - テストは段ごとに `tests/` に書く。見た目を変えたら、SVG をブラウザで開いて確かめる
 - エディタは、数を書かない操作を既定にする。数の指定は「高度な設定」と Alt+ドラッグに留める([docs/design/editor.md](docs/design/editor.md))

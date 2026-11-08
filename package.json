@@ -1,7 +1,7 @@
 {
   "name": "zu",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "図形を文字で書いて SVG にする記述言語の試作",
   "engines": {
