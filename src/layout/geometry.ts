@@ -58,111 +58,64 @@ export function clip(p: Point, d: Point, box: Box, low = 0, high = Infinity): [n
   return [low, high];
 }
 
-// 線の通り道。controls があれば start から end への3次ベジェ曲線(controls は start の側、end の側の順)、なければ線分。
-// 3次にしたのは、両端の向きを別々に決められるようにするため(端をずらした弧を、図形のほうへ向け直す)
-export type Path = { start: Point; controls: [Point, Point] | null; end: Point };
+// 線の通り道。control があれば start から end への2次ベジェ曲線、なければ線分
+export type Path = { start: Point; control: Point | null; end: Point };
 
-// 2次ベジェ曲線(制御点 control)と同じ形の3次ベジェ曲線
-export function fromQuadratic(start: Point, control: Point, end: Point): Path {
-  const toward = (from: Point) => ({ x: from.x + ((control.x - from.x) * 2) / 3, y: from.y + ((control.y - from.y) * 2) / 3 });
-  return { start, controls: [toward(start), toward(end)], end };
-}
-
-const lerp = (p: Point, q: Point, t: number): Point => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+const mix = (weights: [number, number, number], { start, control, end }: Path): Point => ({
+  x: weights[0] * start.x + weights[1] * control!.x + weights[2] * end.x,
+  y: weights[0] * start.y + weights[1] * control!.y + weights[2] * end.y,
+});
 
 // 通り道の t(0 が start、1 が end)の点
-export function pointAt({ start, controls, end }: Path, t: number): Point {
-  if (!controls) return lerp(start, end, t);
-  const [c1, c2] = controls;
-  const s = 1 - t;
-  const [a, b, c, d] = [s * s * s, 3 * s * s * t, 3 * s * t * t, t * t * t];
-  return {
-    x: a * start.x + b * c1.x + c * c2.x + d * end.x,
-    y: a * start.y + b * c1.y + c * c2.y + d * end.y,
-  };
+export function pointAt(path: Path, t: number): Point {
+  const { start, control, end } = path;
+  if (!control) return { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
+  return mix([(1 - t) * (1 - t), 2 * (1 - t) * t, t * t], path);
 }
 
-// t での進む向き(長さ 1)。制御点が端に重なって向きが出ないときは、次の点へ向かう向き
-export function tangentAt({ start, controls, end }: Path, t: number): Point {
-  if (!controls) return direction(start, end);
-  const [c1, c2] = controls;
-  const s = 1 - t;
+// t での進む向き(長さ 1)
+export function tangentAt({ start, control, end }: Path, t: number): Point {
+  if (!control) return direction(start, end);
   const d = {
-    x: 3 * (s * s * (c1.x - start.x) + 2 * s * t * (c2.x - c1.x) + t * t * (end.x - c2.x)),
-    y: 3 * (s * s * (c1.y - start.y) + 2 * s * t * (c2.y - c1.y) + t * t * (end.y - c2.y)),
+    x: 2 * (1 - t) * (control.x - start.x) + 2 * t * (end.x - control.x),
+    y: 2 * (1 - t) * (control.y - start.y) + 2 * t * (end.y - control.y),
   };
   const length = Math.hypot(d.x, d.y);
-  if (length > 1e-9) return { x: d.x / length, y: d.y / length };
-  return t < 0.5 ? direction(start, distance(start, c2) > 0 ? c2 : end) : direction(distance(c1, end) > 0 ? c1 : start, end);
+  return length === 0 ? direction(start, end) : { x: d.x / length, y: d.y / length };
 }
 
-// t で二つに分ける(de Casteljau)
-function split(path: Path, t: number): [Path, Path] {
-  const { start, controls, end } = path;
-  const middle = pointAt(path, t);
-  if (!controls) return [{ start, controls: null, end: middle }, { start: middle, controls: null, end }];
-  const [c1, c2] = controls;
-  const a = lerp(start, c1, t);
-  const b = lerp(c1, c2, t);
-  const c = lerp(c2, end, t);
-  const ab = lerp(a, b, t);
-  const bc = lerp(b, c, t);
-  return [
-    { start, controls: [a, ab], end: middle },
-    { start: middle, controls: [bc, c], end },
-  ];
-}
-
-// t0 から t1 までの部分。3次ベジェ曲線の一部は3次ベジェ曲線
+// t0 から t1 までの部分。2次ベジェ曲線の一部は2次ベジェ曲線で、制御点は両端の t から決まる
 export function subPath(path: Path, t0: number, t1: number): Path {
-  if (t1 <= 0) return { start: path.start, controls: path.controls && [path.start, path.start], end: path.start };
-  const [head] = split(path, t1);
-  return split(head, t0 / t1)[1];
+  const start = pointAt(path, t0);
+  const end = pointAt(path, t1);
+  if (!path.control) return { start, control: null, end };
+  return { start, control: mix([(1 - t0) * (1 - t1), (1 - t0) * t1 + t0 * (1 - t1), t0 * t1], path), end };
 }
 
 // 折れ線で近づけた通り道。線分なら両端だけ
 export function polyline(path: Path, segments = 32): Point[] {
-  if (!path.controls) return [path.start, path.end];
+  if (!path.control) return [path.start, path.end];
   return Array.from({ length: segments + 1 }, (_, index) => pointAt(path, index / segments));
 }
 
-// 2本の直線(p + d·s、q + e·t)の交点。平行なら null
-function intersect(p: Point, d: Point, q: Point, e: Point): Point | null {
-  const cross = d.x * e.y - d.y * e.x;
-  if (Math.abs(cross) < 1e-9) return null;
-  const s = ((q.x - p.x) * e.y - (q.y - p.y) * e.x) / cross;
-  return along(p, d, s);
-}
-
 // 通り道を、進む向きの左(SVG の座標で (-u.y, u.x) の向き)へ by ずらした通り道。
-// 曲線は、制御点を結ぶ3本の線分をそれぞれずらし、隣どうしの交点を新しい制御点にする(Tiller と Hanson の方法)。
-// ゆるい弧ならほぼ平行な曲線になる
+// 曲線は、両端の接線をずらした2本が交わる点を制御点にする(ゆるい弧ならほぼ平行な曲線になる)
 export function offsetPath(path: Path, by: number): Path {
   const normal = (u: Point) => ({ x: -u.y, y: u.x });
   const n0 = normal(tangentAt(path, 0));
   const n1 = normal(tangentAt(path, 1));
   const start = along(path.start, n0, by);
   const end = along(path.end, n1, by);
-  if (!path.controls) return { start, controls: null, end };
-  const [c1, c2] = path.controls;
-  const middle = direction(c1, c2);
-  const shifted = along(c1, normal(middle), by);
-  const first =
-    distance(c1, c2) > 1e-9 ? intersect(start, tangentAt(path, 0), shifted, middle) : null;
-  const second =
-    distance(c1, c2) > 1e-9 ? intersect(shifted, middle, end, tangentAt(path, 1)) : null;
-  return {
-    start,
-    controls: [first ?? along(c1, n0, by), second ?? along(c2, n1, by)],
-    end,
-  };
+  if (!path.control) return { start, control: null, end };
+  const scale = by / (1 + n0.x * n1.x + n0.y * n1.y);
+  return { start, control: { x: path.control.x + (n0.x + n1.x) * scale, y: path.control.y + (n0.y + n1.y) * scale }, end };
 }
 
 // 両端をそれぞれ start、end の長さ(端からのまっすぐな距離)だけ縮めた通り道
 export function trimPath(path: Path, start: number, end: number): Path {
-  if (!path.controls) {
+  if (!path.control) {
     const d = direction(path.start, path.end);
-    return { start: along(path.start, d, start), controls: null, end: along(path.end, d, -end) };
+    return { start: along(path.start, d, start), control: null, end: along(path.end, d, -end) };
   }
   // 端からの距離は、端の近くでは t とともに増えるので、二分法で t を探す
   const reach = (from: Point, length: number, toward: (t: number) => Point) => {

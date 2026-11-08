@@ -1,7 +1,7 @@
 // 線の両端の位置とラベルの場所を決める。図形の位置には、ラベルの入る間(roomFor)を通してだけ影響する
 import { ZuError } from "../errors.ts";
 import type { Bend, Head, LineStatement, LineStyle, Scale } from "../syntax/ast.ts";
-import { along, clip, contains, direction, distance, fromQuadratic, grow, pointAt, subPath, tangentAt } from "./geometry.ts";
+import { along, clip, contains, direction, distance, grow, pointAt, subPath, tangentAt } from "./geometry.ts";
 import type { Box, Path, Point } from "./geometry.ts";
 import { aimInside, arrangeOnRing, spreadOnRing, spreadTips, tipInside } from "./into.ts";
 import { LABEL, crosses, labelSize, placeLabels } from "./labels.ts";
@@ -9,14 +9,13 @@ import { LABEL, crosses, labelSize, placeLabels } from "./labels.ts";
 // 線の端。id はつないだ図形か線。point は線の端の位置(図形の本体の手前か、中まで伸ばした所)
 export type PlacedEnd = { id: string; point: Point; head: Head };
 
-// id は線の名前(as。なければ null)。controls は曲げた線(bend)の3次ベジェ曲線の制御点(from の側、to の側。
-// まっすぐなら null)
+// id は線の名前(as。なければ null)。control は曲げた線(bend)の2次ベジェ曲線の制御点(まっすぐなら null)
 export type PlacedLine = {
   id: string | null;
   style: LineStyle;
   from: PlacedEnd;
   to: PlacedEnd;
-  controls: [Point, Point] | null;
+  control: Point | null;
   label: string | null;
   // ラベルの下地の外枠
   labelBox: Box | null;
@@ -29,7 +28,7 @@ export type ShapeFrame = { id: string; anchor: Point; body: Box; inner: Box; box
 
 // 線の端と図形の本体の間、同じ2つの図形を結ぶ線どうしの間隔、ラベルと矢先の間。
 // apart は同じ図形に来る端どうしの最小の間(矢先どうしが離れて、別々の線に見えるよう)
-// approach は、曲げた線がどちらの側から入ってくるかを見る、端からさかのぼる長さ。
+// approach は、曲げた線がどちらの側から入ってくるかを見る、端からさかのぼる長さ
 // focus は、離した曲げた線の端を向ける点の、端からの奥行き(図形の中心より奥の点へ向け、矢先が図形のほうへ寄るように)
 const LINE = { margin: 6, spacing: 16, clearance: 10, apart: 14, approach: 30, focus: 40 };
 // 線に向けた線の端と、向けた先のラベルの下地や線との間(二重線は2本の外側で止める)。
@@ -153,7 +152,7 @@ export function placeLines(statements: LineStatement[], shapes: Map<string, Shap
         style: statement.style,
         from: { id: statement.from.id, point: path.start, head: statement.from.head },
         to: { id: statement.to.id, point: path.end, head: statement.to.head },
-        controls: path.controls,
+        control: path.control,
         label: statement.label,
         labelBox: labelBoxes[index]!,
         over: statement.from.into || statement.to.into,
@@ -191,8 +190,8 @@ function check(statements: LineStatement[], shapes: Map<string, ShapeFrame>) {
 
 // 線に向ける線の当て先。線の中点(弧なら頂点)を狙う。線がラベルの下地を通っていれば(ラベルが線の上にあれば)、
 // ラベルに当てる。当てる点を動かすのは、中点での接線の上(弧でも、間隔の分ならほとんど離れない)
-function lineTarget(id: string, { style, from, to, controls, labelBox }: PlacedLine): Target {
-  const path = { start: from.point, controls, end: to.point };
+function lineTarget(id: string, { style, from, to, control, labelBox }: PlacedLine): Target {
+  const path = { start: from.point, control, end: to.point };
   if (labelBox && crosses(path, labelBox)) {
     const anchor = { x: labelBox.x + labelBox.width / 2, y: labelBox.y + labelBox.height / 2 };
     return { id, anchor, body: labelBox, inner: labelBox, box: labelBox, margin: ONTO.label, along: null };
@@ -324,7 +323,8 @@ function cut(draft: Draft): Segment {
   if (control) {
     // ラベルを脇に置くなら、ふくらんだ外側を先に試す。脇の向きは (-u.y, u.x) が 1 で、左へのふくらみはその逆
     const side = statement.bend!.side === "left" ? -1 : 1;
-    return { statement, path: cutCurve(draft, reaim(draft, fromQuadratic(centers[0], control, centers[1]))), side };
+    const original = { start: centers[0], control, end: centers[1] };
+    return { statement, path: cutCurve(draft, reaim(draft, original, p, q)), side };
   }
   const d = direction(p, q);
   const fromStart = fixed[0] ? 0 : leave(draft.frames[0], p, d);
@@ -336,7 +336,7 @@ function cut(draft: Draft): Segment {
   // ラベルを脇に置くなら、組の外側(ずらした向き)を先に試す。この線から見た向き(左が 1)に直す
   const towards = Math.sign(offset) || 1;
   const side = towards * (Math.sign(-d.y * normal.x + d.x * normal.y) || 1);
-  return { statement, path: { start, controls: null, end }, side };
+  return { statement, path: { start, control: null, end }, side };
 }
 
 // 4. 同じ図形に来る端(中まで伸ばす端を除く)が近すぎれば、本体の手前の枠の縁に沿って離す。
@@ -392,26 +392,41 @@ function leave(frame: Target, from: Point, toward: Point) {
   return clip(from, toward, grow(frame.body, frame.margin))?.[1] ?? 0;
 }
 
-// 曲げた線の、ほかの端から離した端(ends)を、その点へ動かして図形のほうへ向け直す。
-// 端での向きは、図形の中心より奥の点(端から focus の奥行き)へ向かう向きにする。どの端も同じ奥の点へ向かうので、
-// 同じ図形に来る矢先は図形へ向かって寄る。制御点までの長さは元のまま。動かさない端の側は元の弧のまま
-function reaim({ frames, ends }: Draft, path: Path): Path {
-  if (!ends[0] && !ends[1]) return path;
-  const points = [path.start, path.end];
-  const controls = [...path.controls!] as [Point, Point];
-  for (const side of [0, 1] as const) {
-    const end = ends[side];
-    if (!end) continue;
-    const handle = distance(points[side]!, controls[side]);
-    // 元の弧が図形へ入っていく向き
-    const inward = direction(controls[side], points[side]!);
+// 曲げた線の端をほかの端から離した(ends)とき、弧を新しい端 p、q に合わせて曲げ直す。
+// 弧は2次ベジェ曲線のままにする(曲がる向きが途中で変わらず、曲がりの強さも頂点で一度強まるだけ)。
+// 制御点は、新しい弦(p と q を結ぶ線分)の上に、両端で弦となす角を底角とする三角形を立てた頂点。ふくらむ側は元のまま。
+// 角は、決めた曲げの角(bend の大きさ)。ただし離した矢先のある端は、図形の中心より奥の点(端から focus の奥行き)へ
+// 向かうよう角を変え、同じ図形に来る矢先が図形へ寄るようにする。曲げが消えたり強すぎたりしないよう、変えた角は
+// 決めた角の半分から倍までに収める
+function reaim({ frames, ends, statement }: Draft, original: Path & { control: Point }, p: Point, q: Point): Path {
+  if (!ends[0] && !ends[1]) return { start: p, control: original.control, end: q };
+  const { start: p0, control: c0, end: p1 } = original;
+  const length = distance(p, q);
+  if (length === 0) return { start: p, control: c0, end: q };
+  const u = direction(p, q);
+  // ふくらむ側(弦に直交する向き)。元の弧と同じ側
+  const sideOf = Math.sign((p1.x - p0.x) * (c0.y - p0.y) - (p1.y - p0.y) * (c0.x - p0.x)) || 1;
+  const bulge = { x: -u.y * sideOf, y: u.x * sideOf };
+  const bend = (BEND_ANGLES[statement.bend!.scale ?? "medium"] * Math.PI) / 180;
+  const heads = [statement.from.head, statement.to.head];
+
+  const angles = ([0, 1] as const).map((side) => {
+    const end = side === 0 ? p : q;
+    if (!ends[side] || heads[side] === "none") return bend;
+    // 弦に沿って反対の端へ向かう向きから、奥の点から端へ向かう向き(制御点のある側)までの角
+    const inward = direction(c0, side === 0 ? p0 : p1);
     const { anchor } = frames[side];
     const depth = (anchor.x - end.x) * inward.x + (anchor.y - end.y) * inward.y;
-    const focus = along(anchor, inward, Math.max(0, LINE.focus - depth));
-    points[side] = end;
-    controls[side] = along(end, direction(focus, end), handle);
-  }
-  return { start: points[0]!, controls, end: points[1]! };
+    const outward = direction(along(anchor, inward, Math.max(0, LINE.focus - depth)), end);
+    const base = side === 0 ? u : { x: -u.x, y: -u.y };
+    const angle = Math.atan2(outward.x * bulge.x + outward.y * bulge.y, outward.x * base.x + outward.y * base.y);
+    return Math.min(Math.max(angle, bend / 2), bend * 2);
+  });
+  // 底角 a0、a1 の三角形の頂点。p からの距離は 弦 × sin a1 / sin(a0 + a1)
+  const [a0, a1] = angles as [number, number];
+  const reach = (length * Math.sin(a1)) / Math.sin(a0 + a1);
+  const toward = { x: u.x * Math.cos(a0) + bulge.x * Math.sin(a0), y: u.y * Math.cos(a0) + bulge.y * Math.sin(a0) };
+  return { start: p, control: along(p, toward, reach), end: q };
 }
 
 // 曲げた線を、両端の本体の手前で切る(中まで伸ばす端と、ほかの端から離した端は切らない)
@@ -428,8 +443,7 @@ function leaveCurve(frame: Target, path: Path, fromEnd: boolean) {
   if (frame.along) {
     // 端の近くの弧はほぼまっすぐなので、まっすぐな線と同じ長さを、端での速さ(t あたりの長さ)で t に直す
     const u = tangentAt(path, fromEnd ? 1 : 0);
-    const [c1, c2] = path.controls!;
-    const speed = 3 * (fromEnd ? distance(c2, path.end) : distance(path.start, c1));
+    const speed = 2 * (fromEnd ? distance(path.control!, path.end) : distance(path.start, path.control!));
     return speed === 0 ? 0 : Math.min(leave(frame, point(0), u) / speed, 0.5);
   }
   const box = grow(frame.body, frame.margin);

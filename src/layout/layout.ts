@@ -53,10 +53,10 @@ export function layout(document: Document): Scene {
   // 図形と線(端、弧の頂点、ラベルの下地)の範囲。図の下の文はその下に置く
   const figure = union([
     ...placed.map(({ box }) => box),
-    ...lines.flatMap(({ from, to, controls, labelBox }) => [
+    ...lines.flatMap(({ from, to, control, labelBox }) => [
       pointBox(from.point),
       pointBox(to.point),
-      ...(controls ? [pointBox(pointAt({ start: from.point, controls, end: to.point }, 0.5))] : []),
+      ...(control ? [pointBox(pointAt({ start: from.point, control, end: to.point }, 0.5))] : []),
       ...(labelBox ? [labelBox] : []),
     ]),
   ]);
@@ -85,7 +85,7 @@ export function layout(document: Document): Scene {
       ...line,
       from: { ...line.from, point: shift(line.from.point) },
       to: { ...line.to, point: shift(line.to.point) },
-      controls: line.controls && [shift(line.controls[0]), shift(line.controls[1])],
+      control: line.control && shift(line.control),
       labelBox: line.labelBox && shift(line.labelBox),
     })),
     captions: captions.map((caption) => ({ ...caption, box: shift(caption.box) })),

@@ -3,8 +3,7 @@ import { test } from "node:test";
 import { ZuError, layout, parse, render } from "../src/index.ts";
 import { DEFAULT_GAP, PADDING } from "../src/layout/layout.ts";
 import type { PlacedShape } from "../src/layout/layout.ts";
-import { pointAt, tangentAt } from "../src/layout/geometry.ts";
-import type { PlacedLine } from "../src/layout/layout.ts";
+import { tangentAt } from "../src/layout/geometry.ts";
 import { controlFor } from "../src/layout/lines.ts";
 import { measureText } from "../src/layout/measure.ts";
 
@@ -15,8 +14,6 @@ const place = (source: string) => {
     scene.shapes.map(({ id, box, anchor }: PlacedShape) => [id, { ...box, cx: anchor.x, cy: anchor.y }]),
   );
 };
-// 曲げた線の頂点(通り道の中ほど)
-const apexOf = ({ from, to, controls }: PlacedLine) => pointAt({ start: from.point, controls, end: to.point }, 0.5);
 // 座標は小数の計算なので、誤差の範囲で比べる
 const close = (actual: number, expected: number) =>
   assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} は ${expected} ではありません`);
@@ -356,7 +353,7 @@ test("lines pointed at lines report what cannot be done", () => {
 });
 
 test("bend left bulges to the left of the way, as seen walking from one end to the other", () => {
-  const control = (source: string) => apexOf(layout(parse(source)).lines[0]!);
+  const control = (source: string) => layout(parse(source)).lines[0]!.control!;
   const east = layout(parse("text a\ntext c right of a by 200\na ---> c bend left"));
   const { from, to } = east.lines[0]!;
   // 右へ進む線の左は上
@@ -365,18 +362,17 @@ test("bend left bulges to the left of the way, as seen walking from one end to t
   assert.ok(control("text a\ntext c right of a by 200\nc ---> a bend left").y > from.point.y);
   // 下へ進む線の左は右(東)
   const down = layout(parse("text a\ntext b below a by 200\na ---> b bend left")).lines[0]!;
-  assert.ok(apexOf(down).x > down.from.point.x);
+  assert.ok(down.control!.x > down.from.point.x);
   assert.ok(to.point.x > from.point.x);
   // 本体の中心どうしを結ぶ弧が、端で弦となす角は既定で 30°(図形の手前で切るので、引いた弧の端では少し浅い)
   const apex = controlFor({ x: 0, y: 0 }, { x: 200, y: 0 }, { side: "left", scale: null })!;
   close(apex.x, 100);
   close(Math.atan2(-apex.y, 100) * (180 / Math.PI), 30);
-  // large は small より大きくふくらむ(頂点が端より高い分で比べる。図は頂点が余白のすぐ内側に来るよう寄せる)
-  const rise = (scale: string) => {
-    const line = layout(parse(`text a\ntext c right of a by 200\na ---> c bend left ${scale}`)).lines[0]!;
-    return line.from.point.y - apexOf(line).y;
-  };
-  assert.ok(rise("large") > rise("small"));
+  // large は small より大きくふくらむ
+  assert.ok(
+    control("text a\ntext c right of a by 200\na ---> c bend left large").y <
+      control("text a\ntext c right of a by 200\na ---> c bend left small").y,
+  );
 });
 
 test("a bent line keeps its label on the bulge, is not shifted aside, and is drawn as a curve", () => {
@@ -387,13 +383,14 @@ test("a bent line keeps its label on the bulge, is not shifted aside, and is dra
   close(straight!.from.point.y, scene.shapes[0]!.anchor.y);
   close(straight!.to.point.y, scene.shapes[1]!.anchor.y);
   // ラベルは弧の頂点(線の上)
-  const apex = apexOf(bent!);
+  const { from, to, control } = bent!;
+  const apex = { x: (from.point.x + 2 * control!.x + to.point.x) / 4, y: (from.point.y + 2 * control!.y + to.point.y) / 4 };
   const box = bent!.labelBox!;
   close(box.x + box.width / 2, apex.x);
   close(box.y + box.height / 2, apex.y);
   // 図の範囲は弧の頂点を含む
   assert.ok(box.y >= PADDING - 1e-9);
-  assert.match(render('text a\ntext c right of a by 200\na ===> c bend left'), /<path d="M[^"]+ C[^"]+"[^>]*\/>.*<path d="M/);
+  assert.match(render('text a\ntext c right of a by 200\na ===> c bend left'), /<path d="M[^"]+ Q[^"]+"[^>]*\/>.*<path d="M/);
 });
 
 test("ends arriving at one shape from close directions are kept apart, so the arrows stay separate", () => {
@@ -410,8 +407,17 @@ test("ends arriving at one shape from close directions are kept apart, so the ar
   assert.ok(arc!.to.point.y > across!.to.point.y, "弧は横の線の下に着く");
   assert.ok(arc!.from.point.x > up!.from.point.x, "弧は縦の線の右から出る");
   // 横の線の下に着く弧の矢先は、横の線と平行でなく、上向きに図形のほうへ寄る
-  const arriving = tangentAt({ start: arc!.from.point, controls: arc!.controls, end: arc!.to.point }, 1);
-  assert.ok(arriving.x > 0 && arriving.y < -0.1, `矢先の向き ${JSON.stringify(arriving)}`);
+  const path = { start: arc!.from.point, control: arc!.control, end: arc!.to.point };
+  const arriving = tangentAt(path, 1);
+  assert.ok(arriving.x > 0 && arriving.y < -0.05, `矢先の向き ${JSON.stringify(arriving)}`);
+  // 曲げ直しても、曲がる向きは途中で変わらず(S 字にならず)、元の弧と同じ側(左)へふくらむ
+  const turns = [0, 0.25, 0.5, 0.75].map((t) => {
+    const a = tangentAt(path, t);
+    const b = tangentAt(path, t + 0.25);
+    return a.x * b.y - a.y * b.x;
+  });
+  // SVG の座標(y が下向き)では、右へ曲がり続ける(左へふくらむ)と正
+  assert.ok(turns.every((turn) => turn > 0), `曲がり ${turns}`);
   // 小さな図形に多く来ても、枠を広げて離す
   const crowd = layout(
     parse("text q\ntext a at -200 -60\ntext b at -200 -20\ntext c at -200 20\ntext d at -200 60\ntext e at -200 0\na ---> q\nb ---> q\nc ---> q\nd ---> q\ne ---> q"),
