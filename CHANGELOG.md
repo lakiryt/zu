@@ -4,6 +4,12 @@ zu(言語とライブラリ)の版ごとの変更。版の付け方は [docs/des
 
 ## 未公開
 
+### 追加
+
+- 図形に紐づく注釈を足した。`a says "売ります"` は吹き出し、`b note "無資力"` は図形のそばの小さな字。置き場所は自動で、`above right` のように語でも決められる
+- 構文木: 文の種類に `AnnotationStatement`(`kind: "annotation"`)を足した。文の種類で場合分けしていれば、この場合を足す。`ANNOTATION_KINDS`、`AnnotationKind`、`Spot` を公開する
+- 配置: `Scene` に `annotations`(`PlacedAnnotation[]`)を足した。`Tail` を公開する
+
 ## 0.4.2 (2026-11-08)
 
 ### 直し

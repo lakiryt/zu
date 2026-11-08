@@ -68,7 +68,7 @@ npm run build                                         # エディタを editor/d
 | 段 | 場所 | 入力 → 出力 |
 | --- | --- | --- |
 | 構文 | `src/syntax/` | 文字列 → 字句(`lexer.ts`)→ 構文木(`parser.ts`、型は `ast.ts`)。`print.ts` は文を文字に戻す |
-| 配置 | `src/layout/` | 構文木 → 図形の外枠と線(`layout.ts` が入口)。大きさは `size.ts`、位置(置き方と揃え)は `position.ts`、線は `lines.ts`(中まで伸ばす端は `into.ts`、ラベルの置き場所は `labels.ts`)、図の下の文は `captions.ts`、文字の大きさの見積もりは `measure.ts`、点と枠の計算は `geometry.ts` |
+| 配置 | `src/layout/` | 構文木 → 図形の外枠と線(`layout.ts` が入口)。大きさは `size.ts`、位置(置き方と揃え)は `position.ts`、線は `lines.ts`(中まで伸ばす端は `into.ts`、ラベルの置き場所は `labels.ts`)、図形の注釈は `annotations.ts`、図の下の文は `captions.ts`、文字の大きさの見積もりは `measure.ts`、点と枠の計算は `geometry.ts` |
 | 描画 | `src/svg/` | 配置 → SVG の文字列 |
 
 誤りはどの段でも `ZuError`(行と列を持つ)で報告する。

@@ -1,6 +1,8 @@
-// 配置の段の入口。構文木から図形の外枠と線を決め、全体を余白の内側へ寄せる。SVG は知らない
+// 配置の段の入口。構文木から図形の外枠、線、注釈を決め、全体を余白の内側へ寄せる。SVG は知らない
 import { ZuError } from "../errors.ts";
 import type { Document, ShapeStatement, SourcePosition } from "../syntax/ast.ts";
+import { placeAnnotations } from "./annotations.ts";
+import type { PlacedAnnotation } from "./annotations.ts";
 import { placeCaptions } from "./captions.ts";
 import type { PlacedCaption } from "./captions.ts";
 import { pointAt, union } from "./geometry.ts";
@@ -11,6 +13,7 @@ import { solvePositions } from "./position.ts";
 import { frameAt, labelOf, sizeOf } from "./size.ts";
 import type { Geometry } from "./size.ts";
 
+export type { PlacedAnnotation, Tail } from "./annotations.ts";
 export type { PlacedCaption } from "./captions.ts";
 export type { Box, Path, Point } from "./geometry.ts";
 export type { PlacedEnd, PlacedLine } from "./lines.ts";
@@ -28,6 +31,7 @@ export type Scene = {
   origin: Point;
   shapes: PlacedShape[];
   lines: PlacedLine[];
+  annotations: PlacedAnnotation[];
   captions: PlacedCaption[];
 };
 
@@ -45,14 +49,23 @@ export function layout(document: Document): Scene {
     return { statement, geometry: size.geometry, anchor, ...frameAt(size, anchor) };
   });
 
+  const frames = new Map(
+    placed.map(({ statement, anchor, box, body, inner }) => [statement.id, { id: statement.id, anchor, box, body, inner }]),
+  );
   const lines = placeLines(
     document.statements.filter((statement) => statement.kind === "line"),
-    new Map(placed.map(({ statement, anchor, box, body, inner }) => [statement.id, { id: statement.id, anchor, box, body, inner }])),
+    frames,
+  );
+  const annotations = placeAnnotations(
+    document.statements.filter((statement) => statement.kind === "annotation"),
+    frames,
+    lines,
   );
 
-  // 図形と線(端、弧の頂点、ラベルの下地)の範囲。図の下の文はその下に置く
+  // 図形、線(端、弧の頂点、ラベルの下地)、注釈の範囲。図の下の文はその下に置く
   const figure = union([
     ...placed.map(({ box }) => box),
+    ...annotations.map(({ box }) => box),
     ...lines.flatMap(({ from, to, control, labelBox }) => [
       pointBox(from.point),
       pointBox(to.point),
@@ -87,6 +100,14 @@ export function layout(document: Document): Scene {
       to: { ...line.to, point: shift(line.to.point) },
       control: line.control && shift(line.control),
       labelBox: line.labelBox && shift(line.labelBox),
+    })),
+    annotations: annotations.map((annotation) => ({
+      ...annotation,
+      box: shift(annotation.box),
+      tail: annotation.tail && {
+        base: [shift(annotation.tail.base[0]), shift(annotation.tail.base[1])],
+        tip: shift(annotation.tail.tip),
+      },
     })),
     captions: captions.map((caption) => ({ ...caption, box: shift(caption.box) })),
   };

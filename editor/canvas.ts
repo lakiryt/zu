@@ -138,6 +138,14 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
         : [...before, pick];
     };
 
+    // 注釈をクリックすると、その図形を選ぶ
+    const note = target.closest("g[data-annotation]");
+    if (note) {
+      const pick = shapePick(note.getAttribute("data-target")!);
+      editor.select(event.shiftKey ? toggle(pick) : [pick]);
+      return;
+    }
+
     const lineGroup = target.closest("g.line");
     if (lineGroup) {
       const pick = linePick(Number(lineGroup.getAttribute("data-line")));
@@ -196,6 +204,10 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
           root.querySelector(`g[data-line="${index}"]`)?.classList.add("detached");
         }
       });
+      // 動かす図形の注釈も、放すまで薄くする
+      for (const group of root.querySelectorAll("g[data-annotation]")) {
+        if (drag.moving.has(group.getAttribute("data-target") ?? "")) group.classList.add("detached");
+      }
       drag.moved = true;
     }
 

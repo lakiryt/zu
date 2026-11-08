@@ -452,8 +452,14 @@ main {
   stroke: var(--accent-strong);
 }
 
-#stage .line.detached {
+#stage .line.detached,
+#stage [data-annotation].detached {
   opacity: 0.2;
+}
+
+/* 注釈はクリックすると、その図形を選ぶ */
+#stage [data-annotation] {
+  cursor: pointer;
 }
 
 #stage .numeric {
@@ -527,13 +533,15 @@ main {
   background: var(--surface);
 }
 
-.captions {
+.captions,
+.annotations {
   margin: 16px 0;
   padding-top: 8px;
   border-top: 1px solid var(--line);
 }
 
-.captions h2 {
+.captions h2,
+.annotations h2 {
   margin: 0 0 8px;
   font-size: 13px;
   font-weight: 600;

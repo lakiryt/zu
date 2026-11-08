@@ -43,6 +43,7 @@ block-beta:
 - 線の端を図形の中まで伸ばす `a ---o b into b`(2026-11-08 追加)。同じ図形に刺さる端は互いに離す
 - 線に名前を付け、ほかの線をその線に向ける `b ---> c "詐害行為" as f` と `x ---> f`(2026-11-08 追加)
 - 線を弧に曲げる `a ---> c bend left`(進む向きから見た左右、TikZ 式。`small`/`large` でふくらみを変える。2026-11-08 追加)
+- 図形に紐づく注釈 `a says "…"`(吹き出し)、`b note "…"`(小さな字の注記)(2026-11-08 追加)。置き場所は自動、`above right` などの語でも決められる
 - 図全体の下の文 `caption "…"`(2026-11-08 追加)。既定は左詰めで図の中と同じ字の大きさ。`center`/`right`、`size small`/`large` で変える
 
 詳しくは SPEC.md。
@@ -56,7 +57,7 @@ block-beta:
 - [design/placement.md](design/placement.md): 数値に頼らない置き方(揃え、並び、間の段階)
 - [design/lines.md](design/lines.md): 線と矢印。決めたことと未決
 - [design/line-targets-and-curves.md](design/line-targets-and-curves.md): 線に向かう線と曲がる線(弧は入れた。折れる線は未定)の検討
-- [design/annotations.md](design/annotations.md): 図形に添える注釈(発言の吹き出し `a says`、状態の注記 `a note`)の検討(2026-11-08、未決)
+- [design/annotations.md](design/annotations.md): 図形に添える注釈(発言の吹き出し `a says`、状態の注記 `a note`)の検討と決めたこと
 - [design/editor.md](design/editor.md): 視覚的なエディタ(`editor/`)。できること、暫定の判断、未決
 - [design/versioning.md](design/versioning.md): 版の付け方と出し方(変更の記録は [CHANGELOG.md](../CHANGELOG.md))
 - [design/brand.md](design/brand.md): 名前(Law図)、ロゴ、検索と共有の情報

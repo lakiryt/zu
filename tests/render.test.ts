@@ -434,3 +434,46 @@ test("lines pointed at lines do not widen the gap between shapes", () => {
   const { b, c } = place('text b\ntext c right of b\nb --- c as f\ntext x above b\nx ---> f "とても長いラベルを付けた線"');
   close(c!.x - (b!.x + b!.width), DEFAULT_GAP);
 });
+
+test("a remark sits in a bubble above and to the right, with its tail toward the shape", () => {
+  const scene = layout(parse('text a "本人"\na says "売ります"'));
+  const [shape] = scene.shapes;
+  const [bubble] = scene.annotations;
+  assert.equal(bubble!.annotation, "says");
+  // 右上: 吹き出しの下端は図形の外枠の上端より尾の分上、左端は図形の中心
+  close(bubble!.box.y + bubble!.box.height, shape!.box.y - 12);
+  close(bubble!.box.x, shape!.anchor.x);
+  // 尾は吹き出しの下の縁から出て、図形の手前で止まる
+  const { base, tip } = bubble!.tail!;
+  close(base[0].y, bubble!.box.y + bubble!.box.height);
+  assert.ok(tip.y < shape!.box.y && tip.y > base[0].y);
+  const svg = render('text a "本人"\na says "売ります"');
+  assert.match(svg, /<g data-annotation="0" data-target="a"><rect [^>]*rx="8"[^>]*\/><polygon [^>]*\/><polyline /);
+});
+
+test("notes sit under the shape in small type, one under another, and avoid lines", () => {
+  const scene = layout(parse('text b "債務者"\nb note "無資力"\nb note "悪意"'));
+  const [shape] = scene.shapes;
+  const [first, second] = scene.annotations;
+  assert.equal(first!.fontSize, 12);
+  assert.equal(first!.tail, null);
+  close(first!.box.y, shape!.box.y + shape!.box.height + 3);
+  close(first!.box.x + first!.box.width / 2, shape!.anchor.x);
+  close(second!.box.y, first!.box.y + first!.box.height + 1);
+  // 下に線があれば、次の候補(右)へ
+  const crowded = layout(parse('text b "債務者"\ntext d below b\nb --- d\nb note "無資力"'));
+  const note = crowded.annotations[0]!;
+  const b = crowded.shapes[0]!;
+  close(note.box.x, b.box.x + b.box.width + 3);
+  // 置き場所を書けば、そこに置く
+  const leftScene = layout(parse('text b "債務者"\nb note "無資力" left'));
+  const left = leftScene.annotations[0]!;
+  close(left.box.x + left.box.width, leftScene.shapes[0]!.box.x - 3);
+  // 注記は小さな字だけ(枠や下地を描かない)
+  assert.match(render('text b\nb note "無資力"'), /<g data-annotation="0" data-target="b"><text [^>]*font-size="12"><tspan[^>]*>無資力<\/tspan><\/text><\/g>/);
+});
+
+test("annotations name a shape", () => {
+  fails('text a\nx says "y"', 2, /「x」という図形はありません/);
+  fails('text a\ntext b\na --- b as f\nf note "y"', 4, /「f」は線です\(注釈は図形に付けます\)/);
+});

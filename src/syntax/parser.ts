@@ -1,8 +1,9 @@
 // 字句の列を文の列にする。1行に1文で、行の途中で誤りがあればその位置を報告する
 import { ZuError } from "../errors.ts";
-import { AXES, BEND_SIDES, DIRECTIONS, JUSTIFICATIONS, SCALES, SHAPES } from "./ast.ts";
+import { ANNOTATION_KINDS, AXES, BEND_SIDES, DIRECTIONS, JUSTIFICATIONS, SCALES, SHAPES } from "./ast.ts";
 import type {
   AlignStatement,
+  AnnotationStatement,
   Bend,
   CaptionStatement,
   Direction,
@@ -66,6 +67,17 @@ export function parse(source: string): Document {
     const head = expect("word", "図形の種類");
     // 2つ目が線の記号なら線の文(図形の種類や align という名前の図形も結べる)
     if (peek().type === "arrow") return line(head);
+    // 2つ目が says か note で、3つ目が文字列なら注釈。図形の種類で始まる文は図形の文として読む
+    // (text says "x" は「says という名前の text」)
+    const second = peek();
+    if (
+      !oneOf(SHAPES, head.value) &&
+      second.type === "word" &&
+      oneOf(ANNOTATION_KINDS, second.value) &&
+      tokens[index + 1]?.type === "string"
+    ) {
+      return annotation(head, second.value);
+    }
     if (head.value === "align") return align(head);
     if (head.value === "caption") return caption(head);
     if (!oneOf(SHAPES, head.value)) {
@@ -129,6 +141,31 @@ export function parse(source: string): Document {
     }
     const [from, toEnd] = ends;
     return { kind: "line", style, from, to: toEnd, label, id, bend, at: head.at, end: last().end };
+  }
+
+  // a says "売ります" above right: 図形 a に紐づく注釈。置き場所は上下と左右の語で書く(書かなければ自動)
+  function annotation(head: Token, kind: AnnotationStatement["annotation"]): AnnotationStatement {
+    next();
+    const text = expect("string", '注釈の文("…")').value;
+    let spot: AnnotationStatement["spot"] = null;
+    if (!atLineEnd()) {
+      const first = expect("word", "置き場所(above、below、left、right)");
+      const vertical = first.value === "above" || first.value === "below" ? first.value : null;
+      let horizontal: "left" | "right" | null = first.value === "left" || first.value === "right" ? first.value : null;
+      if (!vertical && !horizontal) {
+        throw new ZuError(`注釈の置き場所は above、below、left、right で書きます(「${first.value}」がありました)`, first.at);
+      }
+      if (vertical && !atLineEnd()) {
+        const side = expect("word", "左右(left か right)");
+        if (side.value !== "left" && side.value !== "right") {
+          throw new ZuError(`斜めは above right のように、上下の後に left か right を書きます(「${side.value}」がありました)`, side.at);
+        }
+        horizontal = side.value;
+      }
+      if (!atLineEnd()) throw new ZuError(`注釈の文には${describe(peek())}を書けません`, peek().at);
+      spot = { vertical, horizontal };
+    }
+    return { kind: "annotation", annotation: kind, target: head.value, targetAt: head.at, text, spot, at: head.at, end: last().end };
   }
 
   // align row a b c: 挙げた図形を同じ段(column なら同じ列)に揃える

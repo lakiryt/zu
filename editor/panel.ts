@@ -1,11 +1,33 @@
 // 右の欄。選んでいる図形や線の中身を見せ、変えられるようにする
-import { BEND_SIDES, HEADS, JUSTIFICATIONS, LINE_STYLES, SCALES, SHAPES } from "../src/index.ts";
-import type { CaptionStatement, Document, LineStatement, Scale, Shape, ShapeStatement, Size } from "../src/index.ts";
+import { ANNOTATION_KINDS, BEND_SIDES, HEADS, JUSTIFICATIONS, LINE_STYLES, SCALES, SHAPES } from "../src/index.ts";
+import type {
+  AnnotationStatement,
+  CaptionStatement,
+  Document,
+  LineStatement,
+  Scale,
+  Shape,
+  ShapeStatement,
+  Size,
+} from "../src/index.ts";
 import { openAbout } from "./about.ts";
 import { align, connect, pointAtLine, removeSelected, setPlacement } from "./actions.ts";
 import { button, checkbox, choice, html, numberField } from "./dom.ts";
 import * as edit from "./edit.ts";
-import { BEND_NAMES, HEAD_NAMES, JUSTIFY_NAMES, SCALE_NAMES, SHAPE_NAMES, STYLE_NAMES, describeBeside } from "./names.ts";
+import {
+  ANNOTATION_NAMES,
+  BEND_NAMES,
+  HEAD_NAMES,
+  JUSTIFY_NAMES,
+  SCALE_NAMES,
+  SHAPE_NAMES,
+  SPOTS,
+  SPOT_NAMES,
+  STYLE_NAMES,
+  describeBeside,
+  spotName,
+  spotOf,
+} from "./names.ts";
 import { NOTHING, shapePick } from "./state.ts";
 import type { Editor } from "./state.ts";
 
@@ -295,9 +317,46 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
     }
 
     panel.append(
+      annotationFields(document, statement.id),
       advancedFields(statement, change),
       html("div", { class: "row" }, button("この図形を消す", () => removeSelected(editor), { class: "danger" })),
     );
+  }
+
+  // 図形に紐づく注釈(吹き出しと注記)。書いた順に並べ、文、種類、置き場所を変えられる
+  function annotationFields(document: Document, id: string) {
+    const section = html("section", { class: "annotations" }, html("h2", {}, "注釈"));
+    edit.statementsOf(document, "annotation").forEach((statement, index) => {
+      if (statement.target !== id) return;
+      const change = (next: AnnotationStatement | null) =>
+        editor.commit(edit.replaceNth(editor.text, document, "annotation", index, next));
+      section.append(
+        html(
+          "label",
+          { class: "field" },
+          ANNOTATION_NAMES[statement.annotation],
+          textArea(statement.text, 2, (text) => change(text === "" ? null : { ...statement, text })),
+        ),
+        html(
+          "div",
+          { class: "pair" },
+          choice("種類", ANNOTATION_KINDS, ANNOTATION_NAMES, statement.annotation, (annotation) =>
+            change({ ...statement, annotation }),
+          ),
+          choice("置き場所", SPOTS, SPOT_NAMES, spotName(statement.spot), (name) => change({ ...statement, spot: spotOf(name) })),
+        ),
+        html("div", { class: "row" }, button("この注釈を消す", () => change(null), { class: "small" })),
+      );
+    });
+    section.append(
+      html(
+        "div",
+        { class: "row" },
+        button("吹き出しを足す", () => editor.commit(edit.addAnnotation(editor.text, id, "says", "発言"))),
+        button("注記を足す", () => editor.commit(edit.addAnnotation(editor.text, id, "note", "注記"))),
+      ),
+    );
+    return section;
   }
 
   // 数で指定する欄。普段は閉じておく

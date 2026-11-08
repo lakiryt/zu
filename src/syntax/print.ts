@@ -42,6 +42,14 @@ export function print(statement: Statement) {
     case "align":
       parts.push("align", statement.axis, ...statement.members.map(({ id }) => id));
       break;
+    case "annotation":
+      parts.push(statement.target, statement.annotation, quote(statement.text));
+      if (statement.spot) {
+        const { vertical, horizontal } = statement.spot;
+        if (vertical) parts.push(vertical);
+        if (horizontal) parts.push(horizontal);
+      }
+      break;
     case "caption":
       parts.push("caption", quote(statement.text));
       if (statement.justify) parts.push(statement.justify);

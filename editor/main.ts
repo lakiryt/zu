@@ -70,7 +70,8 @@ function selectFromCursor() {
   const { document } = editor;
   if (!document || editor.broken) return;
   const line = source.value.slice(0, source.selectionStart).split("\n").length;
-  const id = edit.shapeAtLine(document, line);
+  // 注釈の行なら、その図形を選ぶ
+  const id = edit.shapeAtLine(document, line) ?? edit.annotationTargetAtLine(document, line);
   const index = edit.indexAtLine(document, "line", line);
   const pick = id !== null ? shapePick(id) : index !== null ? linePick(index) : null;
   if (!pick) return;

@@ -21,9 +21,21 @@ export { parse } from "./syntax/parser.ts";
 export { tokenize } from "./syntax/lexer.ts";
 export type { Token, TokenType } from "./syntax/lexer.ts";
 export { print } from "./syntax/print.ts";
-export { AXES, BEND_SIDES, DIRECTIONS, HEADS, JUSTIFICATIONS, LINE_STYLES, SCALES, SHAPES } from "./syntax/ast.ts";
+export {
+  ANNOTATION_KINDS,
+  AXES,
+  BEND_SIDES,
+  DIRECTIONS,
+  HEADS,
+  JUSTIFICATIONS,
+  LINE_STYLES,
+  SCALES,
+  SHAPES,
+} from "./syntax/ast.ts";
 export type {
   AlignStatement,
+  AnnotationKind,
+  AnnotationStatement,
   Axis,
   Bend,
   BendSide,
@@ -41,6 +53,7 @@ export type {
   ShapeStatement,
   Size,
   SourcePosition,
+  Spot,
   Statement,
 } from "./syntax/ast.ts";
 
@@ -49,6 +62,7 @@ export { DEFAULT_GAP, PADDING, defaultGap, layout } from "./layout/layout.ts";
 export type {
   Box,
   Geometry,
+  PlacedAnnotation,
   Path,
   PlacedCaption,
   PlacedEnd,
@@ -56,6 +70,7 @@ export type {
   PlacedShape,
   Point,
   Scene,
+  Tail,
 } from "./layout/layout.ts";
 
 // 描画

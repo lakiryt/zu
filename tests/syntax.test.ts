@@ -244,3 +244,22 @@ test("a caption holds its text, alignment and size, and prints back", () => {
   assertError('caption "x" left right', 1, 18, /揃えは1つの文に1つまでです/);
   assertError('caption "x" size 12', 1, 18, /大きさ\(small、medium、large\)が必要です/);
 });
+
+test("an annotation is a remark or a note on a shape, with an optional place", () => {
+  const [says, note] = parse('a says "売ります" above right\nb note "無資力"').statements;
+  assert.ok(says?.kind === "annotation" && note?.kind === "annotation");
+  assert.equal(says.annotation, "says");
+  assert.equal(says.target, "a");
+  assert.deepEqual(says.spot, { vertical: "above", horizontal: "right" });
+  assert.equal(note.annotation, "note");
+  assert.equal(note.spot, null);
+  for (const source of ['a says "売ります" above right', 'b note "無資力"', 'b note "x\\ny" left', 'c says "z" below']) {
+    assert.equal(print(parse(source).statements[0]!), source);
+  }
+  // 図形の種類で始まる文は図形の文(says という名前の text)
+  const [shape] = parse('text says "x"').statements;
+  assert.ok(shape?.kind === "shape" && shape.id === "says");
+  assertError('a says "x" up', 1, 12, /注釈の置き場所は above、below、left、right で書きます/);
+  assertError('a says "x" above below', 1, 18, /斜めは above right のように/);
+  assertError('a says "x" left right', 1, 17, /注釈の文には「right」を書けません/);
+});

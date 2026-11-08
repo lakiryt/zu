@@ -1,0 +1,12 @@
+%% 注釈: 発言は吹き出し(says)、図形についての注記は小さな字(note)
+text a "売主(A)"
+text b "第一買主(B)" below a by 60
+text c "第二買主(C)" right of b by 160
+
+a ---> b "売買①"
+a ---> c "売買②"
+
+%% 置き場所は自動。above right のように語で決めることもできる
+a says "売ります"
+b note "悪意"
+c note "登記あり"

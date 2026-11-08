@@ -331,3 +331,13 @@ test("a line and a shape can be picked together, joined in the order picked, and
   assert.equal(editor.text, "text a\ntext b right of a\n");
   assert.deepEqual(editor.selection, []);
 });
+
+test("annotations follow renames and disappear with their shapes", () => {
+  const text = 'text a\ntext b right of a\na says "売ります"\nb note "無資力"\n';
+  assert.equal(
+    edit.rename(text, parse(text), "a", "売主"),
+    'text 売主\ntext b right of 売主\n売主 says "売ります"\nb note "無資力"\n',
+  );
+  assert.doesNotMatch(removeShape(text, "a"), /says/);
+  assert.match(removeShape(text, "a"), /^b note "無資力"$/m);
+});

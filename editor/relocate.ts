@@ -198,6 +198,8 @@ function pinDown(
     if (statement.kind === "caption") return undefined;
     if (statement.kind === "align") return changes.has(statement) ? changes.get(statement) : undefined;
     if (statement.kind === "line") return doomed.has(statement) ? null : undefined;
+    // 消す図形の注釈も消す
+    if (statement.kind === "annotation") return statement.target === removed ? null : undefined;
     const overridden = override(statement);
     if (overridden !== undefined) return overridden;
     if (loose.includes(statement.id)) return { ...statement, placement: atPoint(desired.get(statement.id)!, origin) };

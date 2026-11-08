@@ -93,6 +93,25 @@ export type CaptionStatement = {
   end: SourcePosition;
 };
 
-export type Statement = ShapeStatement | AlignStatement | LineStatement | CaptionStatement;
+// 注釈の種類。says は発言(吹き出し)、note は図形についての注記(小さな字)
+export const ANNOTATION_KINDS = ["says", "note"] as const;
+export type AnnotationKind = (typeof ANNOTATION_KINDS)[number];
+
+// 注釈を置く場所。上下と左右の組で、どちらか一方は null でもよい(above right は右上、left は左)
+export type Spot = { vertical: "above" | "below" | null; horizontal: "left" | "right" | null };
+
+// a says "売ります" above right。target の図形に紐づける注釈。spot が null なら置き場所を自動で決める
+export type AnnotationStatement = {
+  kind: "annotation";
+  annotation: AnnotationKind;
+  target: string;
+  targetAt: SourcePosition;
+  text: string;
+  spot: Spot | null;
+  at: SourcePosition;
+  end: SourcePosition;
+};
+
+export type Statement = ShapeStatement | AlignStatement | LineStatement | CaptionStatement | AnnotationStatement;
 
 export type Document = { statements: Statement[] };

@@ -1,7 +1,8 @@
 // 置き終えた図(Scene)を SVG の文字列にする。大きさや位置は計算し直さない
 import { along, direction, distance, offsetPath, tangentAt, trimPath } from "../layout/geometry.ts";
 import type { Path, Point } from "../layout/geometry.ts";
-import type { PlacedCaption, PlacedLine, PlacedShape, Scene } from "../layout/layout.ts";
+import type { PlacedAnnotation, PlacedCaption, PlacedLine, PlacedShape, Scene } from "../layout/layout.ts";
+import { SAYS } from "../layout/annotations.ts";
 import { HEAD, headScale } from "../layout/lines.ts";
 import { FONT_SIZE, LINE_HEIGHT, labelLines } from "../layout/measure.ts";
 import type { Head, Justify } from "../syntax/ast.ts";
@@ -179,13 +180,30 @@ function drawCurve({ style, from, to }: PlacedLine, path: Path) {
   return [...curves, startHead.svg, endHead.svg].join("");
 }
 
+// 注釈。吹き出しは角の丸い白い枠に尾を付け、注記は小さな字だけ(鉛筆で描ける形に限る)。
+// 尾は、白く塗った三角で枠の縁を消してから、外側の2辺だけを線で描く(枠と尾が一続きに見える)
+function drawAnnotation({ text: content, fontSize, box, tail }: PlacedAnnotation) {
+  const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  if (!tail) return text(content, center.x, center.y, "center", fontSize);
+  const { base, tip } = tail;
+  // 塗りの三角は、縁の線を覆うよう枠の内側へ少し入れる
+  const inward = direction(tip, { x: (base[0].x + base[1].x) / 2, y: (base[0].y + base[1].y) / 2 });
+  const cover = base.map((point) => along(point, inward, HEAD_STROKE_WIDTH));
+  return [
+    `<rect x="${round(box.x)}" y="${round(box.y)}" width="${round(box.width)}" height="${round(box.height)}" rx="${SAYS.radius}" fill="${FACES.front}" stroke="${STROKE}" stroke-width="${HEAD_STROKE_WIDTH}"/>`,
+    `<polygon points="${points([cover[0]!, tip, cover[1]!])}" fill="${FACES.front}"/>`,
+    `<polyline points="${points([base[0], tip, base[1]])}" fill="none" stroke="${STROKE}" stroke-width="${HEAD_STROKE_WIDTH}" stroke-linejoin="round"/>`,
+    text(content, center.x, center.y),
+  ].join("");
+}
+
 // 図の下の文。行を外枠の左、中央、右に揃えて書く
 function drawCaption({ text: content, justify, fontSize, box }: PlacedCaption) {
   const x = box.x + (justify === "left" ? 0 : justify === "right" ? box.width : box.width / 2);
   return text(content, x, box.y + box.height / 2, justify, fontSize);
 }
 
-// 線は図形の下に描く。中まで伸ばした線(over)だけは図形の上に重ねる。図の下の文は最後
+// 線は図形の下に描く。中まで伸ばした線(over)だけは図形の上に重ねる。注釈はその上、図の下の文は最後
 export function toSvg(scene: Scene) {
   const width = round(scene.width);
   const height = round(scene.height);
@@ -195,6 +213,10 @@ export function toSvg(scene: Scene) {
     ...lines(false),
     ...scene.shapes.map((shape) => `<g data-id="${escape(shape.id)}">${drawShape(shape)}</g>`),
     ...lines(true),
+    ...scene.annotations.map(
+      (annotation, index) =>
+        `<g data-annotation="${index}" data-target="${escape(annotation.target)}">${drawAnnotation(annotation)}</g>`,
+    ),
     ...scene.captions.map((caption, index) => `<g data-caption="${index}">${drawCaption(caption)}</g>`),
   ].join("\n  ");
   return [

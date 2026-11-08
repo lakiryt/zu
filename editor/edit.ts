@@ -1,6 +1,15 @@
 // .zu の文字を、文の単位で書き換える。DOM を知らないので Node でも試せる
 import { print } from "../src/index.ts";
-import type { Axis, Document, LineEnd, LineStatement, ShapeStatement, SourcePosition, Statement } from "../src/index.ts";
+import type {
+  AnnotationKind,
+  Axis,
+  Document,
+  LineEnd,
+  LineStatement,
+  ShapeStatement,
+  SourcePosition,
+  Statement,
+} from "../src/index.ts";
 
 // エディタが作る文の位置。書き出すと print で文字になるので、位置は使わない
 export const NOWHERE: SourcePosition = { line: 0, column: 0 };
@@ -137,6 +146,8 @@ export function rename(text: string, document: Document, from: string, to: strin
   const swap = <T extends { id: string }>(item: T): T => (item.id === from ? { ...item, id: to } : item);
   return rewrite(text, document, (statement) => {
     switch (statement.kind) {
+      case "annotation":
+        return statement.target === from ? { ...statement, target: to } : undefined;
       case "caption":
         return undefined;
       case "align":
@@ -284,6 +295,25 @@ export function removeLines(text: string, document: Document, indexes: number[])
 // 名前を付けた線に、ほかの線が向いているか
 export const isPointedAt = (document: Document, name: string) =>
   statementsOf(document, "line").some(({ from, to }) => from.id === name || to.id === name);
+
+// 図形 target に注釈を足す
+export function addAnnotation(text: string, target: string, annotation: AnnotationKind, content: string) {
+  return append(text, {
+    kind: "annotation",
+    annotation,
+    target,
+    targetAt: NOWHERE,
+    text: content,
+    spot: null,
+    at: NOWHERE,
+    end: NOWHERE,
+  });
+}
+
+// 文字の位置(行)にある注釈の図形の名前
+export function annotationTargetAtLine(document: Document, line: number) {
+  return statementsOf(document, "annotation").find((statement) => statement.at.line === line)?.target ?? null;
+}
 
 export function addCaption(text: string, caption: string) {
   return append(text, { kind: "caption", text: caption, justify: null, size: null, at: NOWHERE, end: NOWHERE });
