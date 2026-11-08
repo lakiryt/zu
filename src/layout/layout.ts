@@ -5,7 +5,7 @@ import type { Box, Point } from "./geometry.ts";
 import { placeLines } from "./lines.ts";
 import type { PlacedLine } from "./lines.ts";
 import { solvePositions } from "./position.ts";
-import { bodyOf, boxAt, sizeOf } from "./size.ts";
+import { bodyOf, boxAt, innerOf, sizeOf } from "./size.ts";
 import type { Geometry } from "./size.ts";
 
 export type { Box, Point } from "./geometry.ts";
@@ -49,10 +49,10 @@ export function layout(document: Document): Scene {
   const lines = placeLines(
     document.statements.filter((statement) => statement.kind === "line"),
     new Map(
-      placed.map(({ statement, size, anchor, box }) => [
-        statement.id,
-        { id: statement.id, anchor, body: bodyOf(size, anchor, box), box },
-      ]),
+      placed.map(({ statement, size, anchor, box }) => {
+        const body = bodyOf(size, anchor, box);
+        return [statement.id, { id: statement.id, anchor, body, inner: innerOf(size, body), box }];
+      }),
     ),
   );
 

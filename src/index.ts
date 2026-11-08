@@ -21,7 +21,7 @@ export { parse } from "./syntax/parser.ts";
 export { tokenize } from "./syntax/lexer.ts";
 export type { Token, TokenType } from "./syntax/lexer.ts";
 export { print } from "./syntax/print.ts";
-export { AXES, DIRECTIONS, HEADS, LINE_STYLES, SHAPES } from "./syntax/ast.ts";
+export { AXES, DIRECTIONS, HEADS, LINE_STYLES, SCALES, SHAPES } from "./syntax/ast.ts";
 export type {
   AlignStatement,
   Arrow,
@@ -29,11 +29,14 @@ export type {
   Direction,
   Document,
   Head,
+  LineEndpoint,
   LineStatement,
   LineStyle,
   Placement,
+  Scale,
   Shape,
   ShapeStatement,
+  SizeOption,
   SourcePosition,
   Statement,
 } from "./syntax/ast.ts";

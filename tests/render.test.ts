@@ -38,8 +38,8 @@ test("relative placement keeps the given gap between the outlines and aligns the
 
 test("the body of a cube excludes its label", () => {
   const { b } = place("text a\ncube b");
-  // 正面の一辺 60、奥行き 18 の立方体の中心は、外枠の上端から 39
-  close(b!.cy - b!.y, 39);
+  // 正面の一辺 40、奥行き 12 の立方体の中心は、外枠の上端から 26
+  close(b!.cy - b!.y, 26);
   close(b!.cx, b!.x + b!.width / 2);
 });
 
@@ -139,7 +139,7 @@ test("a line runs between the bodies, stopping short of their outlines", () => {
   close(line!.end.y, b!.anchor.y);
   close(line!.start.x, a!.box.x + a!.box.width + 6);
   // 立方体はラベルを除いた本体の枠で切る(ラベルの幅は本体より狭い)
-  close(line!.end.x, b!.anchor.x - (60 + 18) / 2 - 6);
+  close(line!.end.x, b!.anchor.x - (40 + 12) / 2 - 6);
 });
 
 test("lines between the same pair are drawn side by side, and labels sit in the middle", () => {
@@ -229,4 +229,46 @@ test("three shapes joined in a triangle get room for the labels on the other two
 
 test("the default gap follows the font size", () => {
   close(DEFAULT_GAP, 16 * 2.5);
+});
+
+test("size words pick small, medium (the default) and large shapes", () => {
+  const { a, b, c, d } = place("cube a size small\ncube b\ncube c size large\ncube d size medium");
+  const side = (shape: typeof a) => (shape!.cy - shape!.y) * 2;
+  close(side(a), 28 * 1.3);
+  close(side(b), 40 * 1.3);
+  close(side(c), 60 * 1.3);
+  close(side(d), side(b));
+  const scene = layout(parse("parallelogram p size small\nparallelogram q\nparallelogram r size large"));
+  assert.deepEqual(
+    scene.shapes.map(({ box }) => box.height),
+    [36, 48, 60],
+  );
+});
+
+test("a line drawn into a shape ends inside its front face, and drawn over the shapes", () => {
+  const source = "text a\ncube b right of a by 100\na ---o b into b";
+  const scene = layout(parse(source));
+  const b = scene.shapes[1]!;
+  const { end, over } = scene.lines[0]!;
+  assert.equal(over, true);
+  // 正面は立方体の左下。線は正面の左の縁から 10 入った所で止まる
+  const front = { x: b.anchor.x - (40 + 12) / 2, y: b.box.y + 12 };
+  close(end.x, front.x + 10);
+  assert.ok(end.y > front.y && end.y < front.y + 40);
+  const svg = render(source);
+  assert.ok(svg.indexOf('data-id="b"') < svg.indexOf('data-line="0"'));
+});
+
+test("several lines drawn into one shape end apart from each other", () => {
+  const scene = layout(
+    parse("cube t\ntext a at -200 -10\ntext b at -200 0\ntext c at -200 10\na ---o t into t\nb ---o t into t\nc ---o t into t"),
+  );
+  const tips = scene.lines.map(({ end }) => end);
+  for (let i = 0; i < tips.length; i++) {
+    for (let j = i + 1; j < tips.length; j++) {
+      assert.ok(Math.hypot(tips[i]!.x - tips[j]!.x, tips[i]!.y - tips[j]!.y) >= 12 - 1e-9, `${i} と ${j} が近い`);
+    }
+  }
+  const t = scene.shapes[0]!;
+  for (const tip of tips) assert.ok(tip.y > t.box.y && tip.y < t.box.y + 52);
 });

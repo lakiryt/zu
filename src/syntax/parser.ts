@@ -1,5 +1,5 @@
 import { ZuError } from "../errors.ts";
-import { AXES, DIRECTIONS, SHAPES } from "./ast.ts";
+import { AXES, DIRECTIONS, SCALES, SHAPES } from "./ast.ts";
 import type {
   AlignStatement,
   Axis,
@@ -7,6 +7,7 @@ import type {
   Document,
   LineStatement,
   Placement,
+  Scale,
   Shape,
   ShapeStatement,
   Statement,
@@ -29,6 +30,7 @@ const describe = (token: Token) =>
   token.type === "word" || token.type === "number" ? `「${token.value}」` : NAMES[token.type];
 
 const isShape = (value: string): value is Shape => (SHAPES as readonly string[]).includes(value);
+const isScale = (value: string): value is Scale => (SCALES as readonly string[]).includes(value);
 const isAxis = (value: string): value is Axis => (AXES as readonly string[]).includes(value);
 const isDirection = (value: string): value is Direction =>
   (DIRECTIONS as readonly string[]).includes(value);
@@ -68,16 +70,37 @@ export function parse(source: string): Document {
     return shape(head, head.value);
   }
 
-  // a ---> b "ラベル": 2つの図形を線で結ぶ
+  // a ---> b "ラベル" into b: 2つの図形を線で結ぶ。into に挙げた図形には、線を中まで伸ばす
   function line(head: Token): LineStatement {
     const arrow = readArrow(next().value)!;
     const to = expect("word", "結ぶ先の図形の名前");
     const label = peek().type === "string" ? next().value : null;
-    if (!atLineEnd()) throw new ZuError(`線の文には${describe(peek())}を書けません(ラベルは "…" で書きます)`, peek().at);
+    const from = { id: head.value, at: head.at, into: false };
+    const end = { id: to.value, at: to.at, into: false };
+    if (!atLineEnd()) {
+      const option = peek();
+      if (option.type !== "word" || option.value !== "into") {
+        throw new ZuError(`線の文には${describe(option)}を書けません(ラベルは "…"、中まで伸ばすのは into で書きます)`, option.at);
+      }
+      next();
+      do {
+        const target = expect("word", "中まで伸ばす図形の名前");
+        // 同じ名前を2回挙げたら、まだ into でない側を選ぶ(a --- a は配置の段で誤りにする)
+        const side = [from, end].find((side) => side.id === target.value && !side.into);
+        if (!side) {
+          const twice = [from, end].some((side) => side.id === target.value);
+          throw new ZuError(
+            twice ? `「${target.value}」は2回挙げています` : `「${target.value}」はこの線で結ぶ図形ではありません`,
+            target.at,
+          );
+        }
+        side.into = true;
+      } while (!atLineEnd());
+    }
     return {
       kind: "line",
-      from: { id: head.value, at: head.at },
-      to: { id: to.value, at: to.at },
+      from,
+      to: end,
       arrow,
       label,
       at: head.at,
@@ -131,6 +154,14 @@ export function parse(source: string): Document {
         }
       } else if (option.value === "size") {
         if (size) throw new ZuError("size は1つの図形に1つまでです", option.at);
+        if (peek().type === "word") {
+          const word = next();
+          if (!isScale(word.value)) {
+            throw new ZuError(`大きさは数か ${SCALES.join("、")} で書きます(「${word.value}」がありました)`, word.at);
+          }
+          size = word.value;
+          continue;
+        }
         const width = number("大きさ");
         skipComma();
         const height = peek().type === "number" ? number("高さ") : null;

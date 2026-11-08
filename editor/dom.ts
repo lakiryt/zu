@@ -40,6 +40,13 @@ export function choice<T extends string>(
   return html("label", { class: "field" }, label, select);
 }
 
+export function checkbox(label: string, value: boolean, onChange: (value: boolean) => void) {
+  const input = html("input", { type: "checkbox" }) as HTMLInputElement;
+  input.checked = value;
+  input.addEventListener("change", () => onChange(input.checked));
+  return html("label", { class: "check" }, input, label);
+}
+
 export function numberField(
   label: string,
   value: number | null,

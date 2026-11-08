@@ -172,13 +172,16 @@ function drawLine({ start, end, arrow, label: text, labelBox }: PlacedLine) {
   return parts.join("");
 }
 
-// 置き終えた図形を SVG の文字列にする。線は図形の下に描く
+// 置き終えた図形を SVG の文字列にする。線は図形の下に描く。中まで伸ばした線(over)だけは図形の上に重ねる
 export function toSvg(scene: Scene) {
   const width = round(scene.width);
   const height = round(scene.height);
+  const lines = (over: boolean) =>
+    scene.lines.flatMap((line, index) => (line.over === over ? [`<g data-line="${index}">${drawLine(line)}</g>`] : []));
   const body = [
-    ...scene.lines.map((line, index) => `<g data-line="${index}">${drawLine(line)}</g>`),
+    ...lines(false),
     ...scene.shapes.map((shape) => `<g data-id="${escape(shape.id)}">${draw(shape)}</g>`),
+    ...lines(true),
   ].join("\n  ");
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family='${FONT_FAMILY}' font-size="${FONT_SIZE}" fill="${STROKE}">`,

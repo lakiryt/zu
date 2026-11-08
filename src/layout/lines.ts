@@ -14,6 +14,8 @@ export type PlacedLine = {
   label: string | null;
   // ラベルの下地の外枠
   labelBox: Box | null;
+  // 端を図形の中まで伸ばした線(into)。図形に隠れないよう、図形の上に重ねる
+  over: boolean;
 };
 
 // 線の端と図形の本体の間、同じ2つの図形を結ぶ線どうしの間隔、ラベルの下地の余白、
@@ -62,7 +64,131 @@ export function roomFor(statements: LineStatement[], a: string, b: string, coord
   return room;
 }
 
-export type LineEnd = { id: string; anchor: Point; body: Box; box: Box };
+// 線を中まで伸ばすとき(into): 端を図形の内側の枠(inner)の縁からどれだけ入れるか、同じ図形に刺さる端どうしの最小の間、
+// 端を寄せるとき inner の縁から空ける幅
+const INTO = { depth: 10, spacing: 12, inset: 6 };
+
+// inner は線を中まで伸ばすとき(into)に端を置いてよい枠
+export type LineEnd = { id: string; anchor: Point; body: Box; inner: Box; box: Box };
+
+// p から d の向きへ進んで、box に入るまでの長さ。入らなければ null
+function enter(p: Point, d: Point, box: Box) {
+  let low = 0;
+  let high = Infinity;
+  for (const [step, from, min, max] of [
+    [d.x, p.x, box.x, box.x + box.width],
+    [d.y, p.y, box.y, box.y + box.height],
+  ] as const) {
+    if (step === 0) {
+      if (from < min || from > max) return null;
+      continue;
+    }
+    let t0 = (min - from) / step;
+    let t1 = (max - from) / step;
+    if (t0 > t1) [t0, t1] = [t1, t0];
+    low = Math.max(low, t0);
+    high = Math.min(high, t1);
+    if (low > high) return null;
+  }
+  return low;
+}
+
+// 中まで伸ばす端を置く枠。内側の枠の縁から depth 入る。狭い図形では、縁から入る量を減らす
+function deepOf(inner: Box) {
+  const depth = Math.max(0, Math.min(INTO.depth, Math.min(inner.width, inner.height) / 2 - INTO.inset / 2));
+  return { x: inner.x + depth, y: inner.y + depth, width: inner.width - depth * 2, height: inner.height - depth * 2 };
+}
+
+// 枠の縁を左上から時計回りにたどった長さと、縁の上の点との行き来
+function aroundOf(box: Box, point: Point) {
+  const { x, y, width: w, height: h } = box;
+  const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
+  const px = clamp(point.x, x, x + w);
+  const py = clamp(point.y, y, y + h);
+  const distances = [py - y, x + w - px, y + h - py, px - x];
+  const edge = distances.indexOf(Math.min(...distances));
+  return [px - x, w + (py - y), w + h + (x + w - px), 2 * w + h + (y + h - py)][edge]!;
+}
+
+function pointAround(box: Box, length: number) {
+  const { x, y, width: w, height: h } = box;
+  const total = 2 * (w + h);
+  const s = ((length % total) + total) % total;
+  if (s <= w) return { x: x + s, y };
+  if (s <= w + h) return { x: x + w, y: y + (s - w) };
+  if (s <= 2 * w + h) return { x: x + w - (s - w - h), y: y + h };
+  return { x, y: y + h - (s - 2 * w - h) };
+}
+
+// 輪の上の値(0 から total)を、互いに spacing 以上離す。いちばん広い隙間で輪を切り、一列にして離す
+function spreadAround(values: number[], spacing: number, total: number) {
+  if (total <= 0) return values;
+  if (values.length * spacing > total) {
+    // 収まらなければ、等しく並べる(並びの順は保つ)
+    const order = values.map((value, index) => ({ value, index })).sort((p, q) => p.value - q.value);
+    const result: number[] = [];
+    order.forEach(({ index }, rank) => (result[index] = order[0]!.value + (total / values.length) * rank));
+    return result;
+  }
+  const sorted = [...values].sort((p, q) => p - q);
+  let cut = sorted[0]!;
+  let widest = sorted[0]! + total - sorted[sorted.length - 1]!;
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i]! - sorted[i - 1]! > widest) {
+      widest = sorted[i]! - sorted[i - 1]!;
+      cut = sorted[i]!;
+    }
+  }
+  const unrolled = values.map((value) => (value < cut ? value + total : value));
+  return spread(unrolled, spacing, -Infinity, Infinity);
+}
+
+// 一列に並ぶ値を、互いに spacing 以上離し、low から high に収める。動かす量が少ないよう、
+// 近すぎる値はまとめて元の平均の周りに並べる。収まりきらなければ low から high に等しく並べる
+function spread(values: number[], spacing: number, low: number, high: number) {
+  const order = values.map((value, index) => ({ value, index })).sort((p, q) => p.value - q.value);
+  if (order.length > 1 && (order.length - 1) * spacing > high - low) {
+    const step = (high - low) / (order.length - 1);
+    const result: number[] = [];
+    order.forEach(({ index }, rank) => (result[index] = low + step * rank));
+    return result;
+  }
+  // まとまり。start は先頭の位置、count は数、sum は「元の値 - 先頭からの距離」の和
+  type Cluster = { start: number; count: number; sum: number };
+  const fit = (cluster: Cluster) =>
+    (cluster.start = Math.min(Math.max(cluster.sum / cluster.count, low), high - (cluster.count - 1) * spacing));
+  const clusters: Cluster[] = [];
+  for (const { value } of order) {
+    const cluster = { start: value, count: 1, sum: value };
+    fit(cluster);
+    clusters.push(cluster);
+    while (clusters.length > 1) {
+      const last = clusters[clusters.length - 1]!;
+      const before = clusters[clusters.length - 2]!;
+      if (before.start + before.count * spacing <= last.start) break;
+      before.sum += last.sum - last.count * before.count * spacing;
+      before.count += last.count;
+      fit(before);
+      clusters.pop();
+    }
+  }
+  const result: number[] = [];
+  let rank = 0;
+  for (const cluster of clusters) {
+    for (let i = 0; i < cluster.count; i++) result[order[rank++]!.index] = cluster.start + i * spacing;
+  }
+  return result;
+}
+
+// 点を box の内側(縁から inset 空けた所)に収める。box が狭ければ中心にする
+function clampInto(point: Point, box: Box, inset: number) {
+  const clamp = (value: number, low: number, high: number) =>
+    low > high ? (low + high) / 2 : Math.min(Math.max(value, low), high);
+  return {
+    x: clamp(point.x, box.x + inset, box.x + box.width - inset),
+    y: clamp(point.y, box.y + inset, box.y + box.height - inset),
+  };
+}
 
 // p から d の向きへ進んで、box(余白を足したもの)の外へ出るまでの長さ
 function exit(p: Point, d: Point, box: Box) {
@@ -125,8 +251,8 @@ export function placeLines(statements: LineStatement[], ends: Map<string, LineEn
   for (const statement of statements) pairs.set(pairKey(statement), (pairs.get(pairKey(statement)) ?? 0) + 1);
   const seen = new Map<string, number>();
 
-  // 1. 線を引く
-  const segments: Segment[] = statements.map((statement) => {
+  // 1. 線を引く。まず図形の本体の中心(同じ組の線はずらした点)どうしを結ぶ
+  const drafts = statements.map((statement) => {
     const a = ends.get(statement.from.id)!;
     const b = ends.get(statement.to.id)!;
     const key = pairKey(statement);
@@ -139,21 +265,72 @@ export function placeLines(statements: LineStatement[], ends: Map<string, LineEn
     const length = Math.hypot(second.anchor.x - first.anchor.x, second.anchor.y - first.anchor.y) || 1;
     const normal = { x: -(second.anchor.y - first.anchor.y) / length, y: (second.anchor.x - first.anchor.x) / length };
     const offset = (order - (count - 1) / 2) * LINE.spacing;
+    // 線が向かう点。中まで伸ばす端は、図形の内側の枠に収める
+    const aim = (end: LineEnd, into: boolean) => {
+      const point = { x: end.anchor.x + normal.x * offset, y: end.anchor.y + normal.y * offset };
+      return into ? clampInto(point, end.inner, INTO.inset) : point;
+    };
+    const p = aim(a, statement.from.into);
+    const q = aim(b, statement.to.into);
+    // 中まで伸ばす端は、内側の枠の縁から depth 入った枠(deep)の縁に置く。斜めに入っても浅くならない
+    const tip = (end: LineEnd, own: Point, other: Point) => {
+      const span = Math.hypot(own.x - other.x, own.y - other.y) || 1;
+      const d = { x: (own.x - other.x) / span, y: (own.y - other.y) / span };
+      const reach = Math.min(span, enter(other, d, deepOf(end.inner)) ?? span);
+      return { x: other.x + d.x * reach, y: other.y + d.y * reach };
+    };
+    return {
+      statement,
+      a,
+      b,
+      normal,
+      offset,
+      p,
+      q,
+      fromTip: statement.from.into ? tip(a, p, q) : null,
+      toTip: statement.to.into ? tip(b, q, p) : null,
+    };
+  });
 
-    const p = { x: a.anchor.x + normal.x * offset, y: a.anchor.y + normal.y * offset };
-    const q = { x: b.anchor.x + normal.x * offset, y: b.anchor.y + normal.y * offset };
-    const span = Math.hypot(q.x - p.x, q.y - p.y) || 1;
-    const d = { x: (q.x - p.x) / span, y: (q.y - p.y) / span };
-    const fromA = exit(p, d, a.body);
-    const fromB = exit(q, { x: -d.x, y: -d.y }, b.body);
-    // 図形が重なっていて切ると線が残らないときは、中心どうしを結ぶ
+  // 2. 同じ図形に刺さる端(into)が近すぎれば、deep の縁に沿って離す
+  const stuck = new Map<string, { draft: (typeof drafts)[number]; side: "fromTip" | "toTip" }[]>();
+  for (const draft of drafts) {
+    for (const [side, end] of [
+      ["fromTip", draft.a],
+      ["toTip", draft.b],
+    ] as const) {
+      if (draft[side]) stuck.set(end.id, [...(stuck.get(end.id) ?? []), { draft, side }]);
+    }
+  }
+  for (const [id, group] of stuck) {
+    if (group.length < 2) continue;
+    const ring = deepOf(ends.get(id)!.inner);
+    const wanted = spreadAround(
+      group.map(({ draft, side }) => aroundOf(ring, draft[side]!)),
+      // 角をまたぐと縁をたどる長さより実際の間が狭まる(最も狭くて 1/√2)ので、その分広く取る
+      INTO.spacing * Math.SQRT2,
+      2 * (ring.width + ring.height),
+    );
+    group.forEach(({ draft, side }, index) => (draft[side] = pointAround(ring, wanted[index]!)));
+  }
+
+  // 3. 線の両端を決める。中まで伸ばす端はその点、ほかの端は本体の手前で切る
+  const segments: Segment[] = drafts.map(({ statement, a, b, normal, offset, p, q, fromTip, toTip }) => {
+    const from = fromTip ?? p;
+    const to = toTip ?? q;
+    const span = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+    const d = { x: (to.x - from.x) / span, y: (to.y - from.y) / span };
+    const fromA = fromTip ? 0 : exit(from, d, a.body);
+    const fromB = toTip ? 0 : exit(to, { x: -d.x, y: -d.y }, b.body);
+    // 図形が重なっていて切ると線が残らないときは、向かう点どうしを結ぶ
     const [start, end] =
       fromA + fromB < span
         ? [
-            { x: p.x + d.x * fromA, y: p.y + d.y * fromA },
-            { x: q.x - d.x * fromB, y: q.y - d.y * fromB },
+            { x: from.x + d.x * fromA, y: from.y + d.y * fromA },
+            { x: to.x - d.x * fromB, y: to.y - d.y * fromB },
           ]
-        : [p, q];
+        : [from, to];
+
     // ラベルを脇に置くなら、組の外側(ずらした向き)を先に試す。この線から見た向きに直す
     const towards = Math.sign(offset) || 1;
     const own = { x: -d.y, y: d.x };
@@ -230,6 +407,7 @@ export function placeLines(statements: LineStatement[], ends: Map<string, LineEn
       arrow: statement.arrow,
       label: statement.label,
       labelBox,
+      over: statement.from.into || statement.to.into,
     };
   });
 }

@@ -146,8 +146,8 @@ test("a line statement holds both ends, the arrow and the label", () => {
   const [statement] = parse('a <<--->> b "代理権の授与" %% メモ').statements;
   assert.deepEqual(statement, {
     kind: "line",
-    from: { id: "a", at: { line: 1, column: 1 } },
-    to: { id: "b", at: { line: 1, column: 11 } },
+    from: { id: "a", at: { line: 1, column: 1 }, into: false },
+    to: { id: "b", at: { line: 1, column: 11 }, into: false },
     arrow: { style: "solid", start: "filled", end: "filled" },
     label: "代理権の授与",
     at: { line: 1, column: 1 },
@@ -163,8 +163,25 @@ test("line errors name what was expected", () => {
   assertError("a ---> b <", 1, 10, /「<」は使えません/);
 });
 
+test("into names the ends drawn into their shapes", () => {
+  const [line] = parse('a ---o b "x" into b').statements;
+  assert.ok(line?.kind === "line" && !line.from.into && line.to.into);
+  const [both] = parse("a o---o b into a b").statements;
+  assert.ok(both?.kind === "line" && both.from.into && both.to.into);
+  assertError("a --- b into c", 1, 14, /「c」はこの線で結ぶ図形ではありません/);
+  assertError("a --- b into b b", 1, 16, /「b」は2回挙げています/);
+  assertError("a --- b into", 1, 13, /中まで伸ばす図形の名前が必要です/);
+});
+
+test("size takes a word as well as numbers", () => {
+  const [shape] = parse("cube a size small").statements;
+  assert.ok(shape?.kind === "shape" && shape.size === "small");
+  assertError("cube a size huge", 1, 13, /大きさは数か small、medium、large で書きます/);
+  assert.equal(print(parse("cube a size large").statements[0]!), "cube a size large");
+});
+
 test("printing a line gives back the same line", () => {
-  for (const source of ['a -.->> b "x\\ny"', "a o=== b", "a <--- b", "a --- b"]) {
+  for (const source of ['a -.->> b "x\\ny"', "a o=== b", "a <--- b", "a --- b", 'a ---o b "x" into b', "a o---o b into a b"]) {
     const [statement] = parse(source).statements;
     assert.equal(print(statement!), source);
   }

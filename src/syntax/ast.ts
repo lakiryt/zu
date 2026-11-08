@@ -8,6 +8,13 @@ export type Shape = (typeof SHAPES)[number];
 export const DIRECTIONS = ["left", "right", "above", "below"] as const;
 export type Direction = (typeof DIRECTIONS)[number];
 
+// 大きさを数を書かずに選ぶ語。medium が既定の大きさ
+export const SCALES = ["small", "medium", "large"] as const;
+export type Scale = (typeof SCALES)[number];
+
+// size の書き方。数(幅と高さ。立方体は一辺)か、大きさの語
+export type SizeOption = { width: number; height: number | null } | Scale;
+
 export type Placement =
   | { kind: "at"; x: number; y: number }
   // gap が null なら既定の間を使う
@@ -20,7 +27,7 @@ export type ShapeStatement = {
   // null なら id をラベルにする
   label: string | null;
   placement: Placement | null;
-  size: { width: number; height: number | null } | null;
+  size: SizeOption | null;
   at: SourcePosition;
   // 文の最後の字句の直後(行末のコメントは含まない)
   end: SourcePosition;
@@ -48,11 +55,14 @@ export type Head = (typeof HEADS)[number];
 
 export type Arrow = { style: LineStyle; start: Head; end: Head };
 
-// a ---> b "ラベル"。start は from の側、end は to の側の端
+// 線の端の図形。into なら、線をその図形の本体の中まで伸ばす(端の印が図形に刺さった形)
+export type LineEndpoint = { id: string; at: SourcePosition; into: boolean };
+
+// a ---> b "ラベル" into b。start は from の側、end は to の側の端
 export type LineStatement = {
   kind: "line";
-  from: { id: string; at: SourcePosition };
-  to: { id: string; at: SourcePosition };
+  from: LineEndpoint;
+  to: LineEndpoint;
   arrow: Arrow;
   label: string | null;
   at: SourcePosition;

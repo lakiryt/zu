@@ -507,6 +507,15 @@ main {
   background: var(--surface);
 }
 
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .field button {
   align-self: flex-start;
 }

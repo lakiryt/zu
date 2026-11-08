@@ -23,7 +23,9 @@ export function printPlacement(placement: Placement) {
 export function print(statement: Statement) {
   if (statement.kind === "line") {
     const label = statement.label === null ? "" : ` ${quote(statement.label)}`;
-    return `${statement.from.id} ${writeArrow(statement.arrow)} ${statement.to.id}${label}`;
+    const into = [statement.from, statement.to].filter((end) => end.into).map((end) => end.id);
+    const deep = into.length === 0 ? "" : ` into ${into.join(" ")}`;
+    return `${statement.from.id} ${writeArrow(statement.arrow)} ${statement.to.id}${label}${deep}`;
   }
   if (statement.kind === "align") {
     return ["align", statement.axis, ...statement.members.map(({ id }) => id)].join(" ");
@@ -31,7 +33,9 @@ export function print(statement: Statement) {
   const parts: string[] = [statement.shape, statement.id];
   if (statement.label !== null) parts.push(quote(statement.label));
   if (statement.placement) parts.push(printPlacement(statement.placement));
-  if (statement.size) {
+  if (typeof statement.size === "string") {
+    parts.push(`size ${statement.size}`);
+  } else if (statement.size) {
     const { width, height } = statement.size;
     parts.push(height === null ? `size ${number(width)}` : `size ${number(width)} ${number(height)}`);
   }

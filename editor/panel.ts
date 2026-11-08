@@ -1,11 +1,11 @@
 // 右の欄。選んでいる図形や線の中身を見せ、変えられるようにする
-import { HEADS, LINE_STYLES, SHAPES } from "../src/index.ts";
-import type { Document, LineStatement, Shape, ShapeStatement } from "../src/index.ts";
+import { HEADS, LINE_STYLES, SCALES, SHAPES } from "../src/index.ts";
+import type { Document, LineStatement, Scale, Shape, ShapeStatement } from "../src/index.ts";
 import { openAbout } from "./about.ts";
 import { align, removeSelected, setPlacement } from "./actions.ts";
-import { button, choice, html, numberField } from "./dom.ts";
+import { button, checkbox, choice, html, numberField } from "./dom.ts";
 import * as edit from "./edit.ts";
-import { DIRECTION_NAMES, HEAD_NAMES, SHAPE_NAMES, STYLE_NAMES } from "./names.ts";
+import { DIRECTION_NAMES, HEAD_NAMES, SCALE_NAMES, SHAPE_NAMES, STYLE_NAMES } from "./names.ts";
 import { NOTHING } from "./state.ts";
 import type { Editor } from "./state.ts";
 
@@ -78,8 +78,13 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
     const label = html("textarea", { rows: "2", placeholder: "なし" }) as HTMLTextAreaElement;
     label.value = statement.label ?? "";
     label.addEventListener("change", () => change({ ...statement, label: label.value === "" ? null : label.value }));
-    const reverse = () =>
-      change({ ...statement, from: statement.to, to: statement.from, arrow: { ...arrow, start: arrow.end, end: arrow.start } });
+    // 結ぶ図形だけを入れ替える。端の印と「中まで伸ばす」は端の位置に付いたままなので、矢印の向きが逆になる
+    const { from, to } = statement;
+    const reverse = () => change({ ...statement, from: { ...from, id: to.id }, to: { ...to, id: from.id } });
+    const into = (side: "from" | "to") =>
+      checkbox("図形の中まで伸ばす", statement[side].into, (value) =>
+        change({ ...statement, [side]: { ...statement[side], into: value } }),
+      );
 
     panel.append(
       html(
@@ -93,9 +98,11 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
       choice(`${statement.from.id} の側の端`, HEADS, HEAD_NAMES, arrow.start, (start) =>
         change({ ...statement, arrow: { ...arrow, start } }),
       ),
+      into("from"),
       choice(`${statement.to.id} の側の端`, HEADS, HEAD_NAMES, arrow.end, (end) =>
         change({ ...statement, arrow: { ...arrow, end } }),
       ),
+      into("to"),
       html("label", { class: "field" }, "ラベル", label),
       html("div", { class: "row" }, button("この線を消す", () => change(null), { class: "danger" })),
     );
@@ -125,6 +132,17 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
       html("label", { class: "field" }, "ラベル", label),
       choice("形", SHAPES, SHAPE_NAMES, statement.shape, (shape: Shape) => change({ shape })),
     );
+    // 大きさは語で選ぶ。中は既定なので書かない。数で書いた大きさは「高度な設定」で変える
+    if (statement.shape !== "text") {
+      const { size } = statement;
+      const current = size === null ? "medium" : typeof size === "string" ? size : "numbers";
+      const options = current === "numbers" ? (["numbers", ...SCALES] as const) : SCALES;
+      panel.append(
+        choice<Scale | "numbers">("大きさ", options, SCALE_NAMES, current, (scale) => {
+          if (scale !== "numbers") change({ size: scale === "medium" ? null : scale });
+        }),
+      );
+    }
 
     const placementRow = html(
       "div",
@@ -165,7 +183,8 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
     advanced.addEventListener("toggle", () => (advancedOpen = advanced.open));
     advanced.append(html("summary", {}, "高度な設定(数で指定する)"));
 
-    const { placement, size } = statement;
+    const { placement } = statement;
+    const size = typeof statement.size === "string" ? null : statement.size;
     if (placement?.kind === "beside") {
       advanced.append(
         numberField("間", placement.gap, "自動", (gap) => setPlacement(editor, statement, { ...placement, gap })),
@@ -193,7 +212,7 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
           "div",
           { class: "pair" },
           numberField(statement.shape === "cube" ? "一辺" : "幅", size?.width ?? null, "自動", setSize("width")),
-          statement.shape === "parallelogram" ? numberField("高さ", size?.height ?? null, "60", setSize("height")) : "",
+          statement.shape === "parallelogram" ? numberField("高さ", size?.height ?? null, "自動", setSize("height")) : "",
         ),
       );
     }

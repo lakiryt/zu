@@ -72,7 +72,8 @@ export function baseOf(list: ShapeStatement[], index: number) {
 // 数を書いている図形か(エディタで印を付ける)
 export function usesNumbers(statement: ShapeStatement) {
   const { placement, size } = statement;
-  return placement?.kind === "at" || (placement?.kind === "beside" && placement.gap !== null) || size !== null;
+  const sized = size !== null && typeof size !== "string";
+  return placement?.kind === "at" || (placement?.kind === "beside" && placement.gap !== null) || sized;
 }
 
 // id の図形の位置が変わるとついてくる図形(置き方をたどって id に行き着くもの)。
@@ -163,7 +164,7 @@ export function lines(document: Document) {
 export function addLine(text: string, from: string, to: string) {
   const at = { line: 0, column: 0 };
   const arrow: Arrow = { style: "solid", start: "none", end: "none" };
-  return append(text, { kind: "line", from: { id: from, at }, to: { id: to, at }, arrow, label: null, at, end: at });
+  return append(text, { kind: "line", from: { id: from, at, into: false }, to: { id: to, at, into: false }, arrow, label: null, at, end: at });
 }
 
 export function replaceLine(text: string, document: Document, index: number, next: LineStatement | null) {
