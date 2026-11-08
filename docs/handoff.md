@@ -51,6 +51,7 @@ block-beta:
 
 - [design/placement.md](design/placement.md): 数値に頼らない置き方(揃え、並び、間の段階)
 - [design/lines.md](design/lines.md): 線と矢印。決めたことと未決
+- [design/line-targets-and-curves.md](design/line-targets-and-curves.md): 線に向かう線(詐害行為の矢印への取消など)と曲がる線の検討(2026-11-08、未決)
 - [design/editor.md](design/editor.md): 視覚的なエディタ(`editor/`)。できること、暫定の判断、未決
 - [design/versioning.md](design/versioning.md): 版の付け方と出し方(変更の記録は [CHANGELOG.md](../CHANGELOG.md))
 - [design/brand.md](design/brand.md): 名前(Law図)、ロゴ、検索と共有の情報
