@@ -49,6 +49,8 @@ block-beta:
 
 ## 決めていないこと、次にやりたいこと
 
+判断の基準: [design/principles.md](design/principles.md)(見た目、書き方、配置、エディタで迷ったときに照らす)
+
 検討中の資料:
 
 - [design/placement.md](design/placement.md): 数値に頼らない置き方(揃え、並び、間の段階)

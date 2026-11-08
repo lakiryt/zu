@@ -1,6 +1,6 @@
 # zu
 
-図形を文字で書いて SVG にする記述言語の試作。言語の仕様は [SPEC.md](SPEC.md)、経緯と未決事項は [docs/handoff.md](docs/handoff.md) を読んでから作業する。
+図形を文字で書いて SVG にする記述言語の試作。言語の仕様は [SPEC.md](SPEC.md)、経緯と未決事項は [docs/handoff.md](docs/handoff.md) を読んでから作業する。見た目や書き方に迷ったら [docs/design/principles.md](docs/design/principles.md)(鉛筆で描けるか、矢印の先が分かるか、細かい設定なしで整うか、など)に照らす。
 
 ## 構成
 
