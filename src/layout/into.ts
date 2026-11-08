@@ -47,39 +47,62 @@ export function spreadOnRing(ring: Box, points: Point[], spacing: number): Point
   return lengths.map((length) => pointAround(ring, length));
 }
 
-// 動かさない点(fixed)は置いたままにし、動かす点(movable)を、ほかの点から縁をたどる長さで spacing 以上離れた、
-// 元の位置にいちばん近い所へ順に置く。どこも空いていなければ、ほかの点からいちばん離れた所に置く
-export function avoidOnRing(ring: Box, fixed: Point[], movable: Point[], spacing: number): Point[] {
+// 図形に来る端を、枠(ring)の縁に spacing 以上離して並べる。線が入ってくる向き(center から from を見た向き)の
+// 時計回りの順に縁の上でも並べるので、端を動かしても線どうしはまたがない。pinned の端は動かさず、
+// ほかの端を、その間の空いた所の元の位置に近い所へ置く。間が狭ければ等しく並べる。
+// pinned の端がなければ、縁の上の位置で互いに離す
+export function arrangeOnRing(
+  ring: Box,
+  center: Point,
+  items: { point: Point; from: Point; pinned: boolean }[],
+  spacing: number,
+): Point[] {
   const total = 2 * (ring.width + ring.height);
-  if (total <= 0) return movable;
-  const taken = fixed.map((point) => lengthAround(ring, point));
-  const apart = (s: number) =>
-    Math.min(Infinity, ...taken.map((t) => {
-      const d = Math.abs((((s - t) % total) + total) % total);
-      return Math.min(d, total - d);
-    }));
-  const step = 0.5;
-  return movable.map((point) => {
-    const origin = lengthAround(ring, point);
-    let best = origin;
-    let bestApart = apart(origin);
-    for (let d = 0; d <= total / 2 && bestApart < spacing; d += step) {
-      for (const s of [origin + d, origin - d]) {
-        const value = apart(s);
-        if (value >= spacing) {
-          best = s;
-          bestApart = value;
-          break;
-        }
-        if (value > bestApart) {
-          best = s;
-          bestApart = value;
-        }
+  const points = items.map(({ point }) => point);
+  if (total <= 0 || items.length < 2) return points;
+  if (!items.some(({ pinned }) => pinned)) return spreadOnRing(ring, points, spacing);
+
+  const at = points.map((point) => lengthAround(ring, point));
+  const angle = (index: number) => Math.atan2(items[index]!.from.y - center.y, items[index]!.from.x - center.x);
+  // 入ってくる向きの順(縁の長さと同じく時計回り)。動かさない端から始める
+  const order = items.map((_, index) => index).sort((p, q) => angle(p) - angle(q));
+  const first = order.findIndex((index) => items[index]!.pinned);
+  const cycle = [...order.slice(first), ...order.slice(0, first)];
+  const anchors = cycle.filter((index) => items[index]!.pinned);
+  const result = [...at];
+
+  anchors.forEach((from, k) => {
+    const to = anchors[(k + 1) % anchors.length]!;
+    const low = at[from]!;
+    // 次の動かさない端までの長さ(一つしかなければ一周)
+    const span = anchors.length === 1 ? total : ((at[to]! - low) % total + total) % total || total;
+    const between = cycle.slice(cycle.indexOf(from) + 1, anchors.length === 1 ? cycle.length : cycle.indexOf(to));
+    if (between.length === 0) return;
+    // 元の位置を、この間の中の長さ(low から測る)に直す。間の外なら近いほうの端に寄せる。
+    // 入ってくる向きでは間の後ろ寄りなのに、縁の上では前寄りにある(端が重なっていたときなど)なら、後ろの端に寄せる。逆も同じ
+    const turn = (index: number) => (((angle(index) - angle(from)) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    const angleSpan = anchors.length === 1 ? 2 * Math.PI : turn(to) || 2 * Math.PI;
+    const wanted = between.map((index) => {
+      const offset = (((at[index]! - low) % total) + total) % total;
+      const inside = offset <= span ? offset : offset - span < total - offset ? span : 0;
+      const late = turn(index) > angleSpan / 2;
+      if (late && inside < span / 2) return span;
+      if (!late && inside > span / 2) return 0;
+      return inside;
+    });
+    let placed: number[];
+    if ((between.length + 1) * spacing > span) {
+      placed = between.map((_, j) => (span * (j + 1)) / (between.length + 1));
+    } else {
+      placed = [...wanted];
+      for (let j = 0; j < placed.length; j++) placed[j] = Math.max(placed[j]!, (j === 0 ? 0 : placed[j - 1]!) + spacing);
+      for (let j = placed.length - 1; j >= 0; j--) {
+        placed[j] = Math.min(placed[j]!, (j === placed.length - 1 ? span : placed[j + 1]!) - spacing);
       }
     }
-    taken.push(best);
-    return pointAround(ring, best);
+    between.forEach((index, j) => (result[index] = low + placed[j]!));
   });
+  return result.map((length) => pointAround(ring, length));
 }
 
 // 枠の縁を左上から時計回りにたどった長さと、縁の上の点との行き来

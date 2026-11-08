@@ -3,7 +3,7 @@ import { ZuError } from "../errors.ts";
 import type { Bend, Head, LineStatement, LineStyle, Scale } from "../syntax/ast.ts";
 import { along, clip, contains, direction, distance, grow, pointAt, subPath, tangentAt } from "./geometry.ts";
 import type { Box, Path, Point } from "./geometry.ts";
-import { aimInside, avoidOnRing, spreadOnRing, spreadTips, tipInside } from "./into.ts";
+import { aimInside, arrangeOnRing, spreadOnRing, spreadTips, tipInside } from "./into.ts";
 import { LABEL, crosses, labelSize, placeLabels } from "./labels.ts";
 
 // 線の端。id はつないだ図形か線。point は線の端の位置(図形の本体の手前か、中まで伸ばした所)
@@ -28,7 +28,8 @@ export type ShapeFrame = { id: string; anchor: Point; body: Box; inner: Box; box
 
 // 線の端と図形の本体の間、同じ2つの図形を結ぶ線どうしの間隔、ラベルと矢先の間。
 // apart は同じ図形に来る端どうしの最小の間(矢先どうしが離れて、別々の線に見えるよう)
-const LINE = { margin: 6, spacing: 16, clearance: 10, apart: 14 };
+// approach は、曲げた線がどちらの側から入ってくるかを見る、端からさかのぼる長さ
+const LINE = { margin: 6, spacing: 16, clearance: 10, apart: 14, approach: 30 };
 // 線に向けた線の端と、向けた先のラベルの下地や線との間(二重線は2本の外側で止める)。
 // 同じ線に当てる端どうしの間隔。shallow は、線に浅く当たるときに止める長さを抑える角度の正弦
 const ONTO = { label: 1, line: 1.5, double: 3, spacing: 12, shallow: 0.3 };
@@ -336,10 +337,11 @@ function cut(draft: Draft): Segment {
 }
 
 // 4. 同じ図形に来る端(中まで伸ばす端を除く)が近すぎれば、本体の手前の枠の縁に沿って離す。
-//    まっすぐな線の端はなるべく動かさず(線が傾かないよう)、曲げた線の端を空いた所へずらす。
+//    まっすぐな線の端はなるべく動かさず(線が傾かないよう)、曲げた線の端をその間へずらす。
+//    縁の上の並びは線が入ってくる向きの順に保つので、ずらしても線どうしはまたがない。
 //    離した端は ends に決め、線を引き直す。並べきれない小さな図形では、枠を広げて並べる。動かす端があれば true
 function separateEnds(drafts: Draft[], segments: Segment[]) {
-  type Arrival = { draft: Draft; side: 0 | 1; point: Point };
+  type Arrival = { draft: Draft; side: 0 | 1; point: Point; from: Point };
   const byShape = new Map<Target, Arrival[]>();
   drafts.forEach((draft, index) => {
     const { path } = segments[index]!;
@@ -347,7 +349,10 @@ function separateEnds(drafts: Draft[], segments: Segment[]) {
       const frame = draft.frames[side];
       if (frame.along || draft.tips[side]) continue;
       const point = side === 0 ? path.start : path.end;
-      byShape.set(frame, [...(byShape.get(frame) ?? []), { draft, side, point }]);
+      // 線が入ってくる側の点。端から線をさかのぼった所
+      const u = tangentAt(path, side);
+      const from = along(point, u, side === 0 ? LINE.approach : -LINE.approach);
+      byShape.set(frame, [...(byShape.get(frame) ?? []), { draft, side, point, from }]);
     }
   });
   let moved = false;
@@ -356,19 +361,20 @@ function separateEnds(drafts: Draft[], segments: Segment[]) {
     let ring = grow(frame.body, frame.margin);
     const shortage = arriving.length * LINE.apart - 2 * (ring.width + ring.height);
     if (shortage > 0) ring = grow(ring, shortage / 8);
+    // まっすぐな線どうしが近ければ互いに離し、それを動かさない端として、曲げた線の端を並べる
     const straight = arriving.filter(({ draft }) => draft.statement.bend === null);
-    const bent = arriving.filter(({ draft }) => draft.statement.bend !== null);
-    // まっすぐな線どうしが近ければ互いに離し、曲げた線はそれを避けて置く
-    const placedStraight = spreadOnRing(ring, straight.map(({ point }) => point), LINE.apart);
-    const placedBent = avoidOnRing(ring, placedStraight, bent.map(({ point }) => point), LINE.apart);
-    const placed = new Map<Arrival, Point>([
-      ...straight.map((arrival, index) => [arrival, placedStraight[index]!] as const),
-      ...bent.map((arrival, index) => [arrival, placedBent[index]!] as const),
-    ]);
-    if (shortage <= 0 && arriving.every((arrival) => distance(placed.get(arrival)!, arrival.point) < 1e-6)) continue;
+    const spreadStraight = spreadOnRing(ring, straight.map(({ point }) => point), LINE.apart);
+    const items = arriving.map((arrival) => {
+      const index = straight.indexOf(arrival);
+      return index === -1
+        ? { point: arrival.point, from: arrival.from, pinned: false }
+        : { point: spreadStraight[index]!, from: arrival.from, pinned: true };
+    });
+    const placed = arrangeOnRing(ring, frame.anchor, items, LINE.apart);
+    if (shortage <= 0 && arriving.every((arrival, index) => distance(placed[index]!, arrival.point) < 1e-6)) continue;
     moved = true;
     // 動かない端も決めておく(引き直したとき、ほかの端に合わせて動かないよう)
-    for (const arrival of arriving) arrival.draft.ends[arrival.side] = placed.get(arrival)!;
+    arriving.forEach(({ draft, side }, index) => (draft.ends[side] = placed[index]!));
   }
   return moved;
 }

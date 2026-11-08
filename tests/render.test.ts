@@ -397,6 +397,14 @@ test("ends arriving at one shape from close directions are kept apart, so the ar
   const [first, second] = scene.lines;
   const gap = Math.hypot(first!.to.point.x - second!.to.point.x, first!.to.point.y - second!.to.point.y);
   assert.ok(gap >= 14 - 1e-9, `矢先の間が ${gap}`);
+  // 離した端は、線が入ってくる向きの順に並ぶので、線どうしはまたがない。
+  // 下から弧で来る線は、横から来る線の下に着き、出るときも縦の線の右(弧の進む側)から出る
+  const order = layout(
+    parse('text Q "あいうQ"\ntext R\ntext P below of Q\nP ---> Q "かきくけこ"\nQ --->> R "さしすせそ"\nP --->> R "123" bend left'),
+  );
+  const [up, across, arc] = order.lines;
+  assert.ok(arc!.to.point.y > across!.to.point.y, "弧は横の線の下に着く");
+  assert.ok(arc!.from.point.x > up!.from.point.x, "弧は縦の線の右から出る");
   // 小さな図形に多く来ても、枠を広げて離す
   const crowd = layout(
     parse("text q\ntext a at -200 -60\ntext b at -200 -20\ntext c at -200 20\ntext d at -200 60\ntext e at -200 0\na ---> q\nb ---> q\nc ---> q\nd ---> q\ne ---> q"),
