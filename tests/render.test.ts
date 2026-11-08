@@ -355,9 +355,9 @@ test("a line pointed at an unlabelled line touches its middle with into, and end
   const y = g!.from.point.y;
   close(fromR!.to.point.y, y + 1.5);
   close(fromS!.to.point.y, y + 1.5);
-  // into がなければ触れずに 6 手前で止まる。二重線へ into なら、2本の間まで入る
+  // into がなければ触れずに、線の中心から 10 手前で止まる。二重線へ into なら、2本の間まで入る
   const apart = layout(parse("text p\ntext q right of p by 200\np === q as g\ntext r below p by 80\nr ---> g")).lines[1]!;
-  close(apart.to.point.y, y + 6);
+  close(apart.to.point.y, y + 10);
   const inside = layout(parse("text p\ntext q right of p by 200\np === q as g\ntext r below p by 80\nr ---> g into g")).lines[1]!;
   close(inside.to.point.y, y);
   // 中点の両側に、r の側が左になるよう 12 以上離れる

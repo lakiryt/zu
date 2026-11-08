@@ -35,8 +35,9 @@ const LINE = { margin: 6, spacing: 16, clearance: 10, apart: 14, approach: 30, f
 // 縦向きとみなす線の傾き(向きの横の成分がこれより小さい)
 const UPRIGHT = 0.3;
 // 線に向けた線を into で触れさせるときの、向けた先のラベルの下地や線との間(二重線は2本の間まで入る)。
+// gap は into でないときの線の中心との間(線の太さと矢先の角の分を引いても、離れて見えるよう、図形より広い)。
 // 同じ線に当てる端どうしの間隔。shallow は、線に浅く当たるときに止める長さを抑える角度の正弦
-const ONTO = { label: 1, line: 1.5, double: 0, spacing: 12, shallow: 0.3 };
+const ONTO = { label: 1, line: 1.5, double: 0, gap: 10, spacing: 12, shallow: 0.3 };
 
 // 線を向ける先。図形か、名前を付けた線。線なら anchor は当てる点、body は当てる枠(ラベルの下地か、大きさのない点)。
 // margin は線の端を body のどれだけ手前で止めるか。touch は線に向けた端を into で触れさせるときの margin(図形なら null)。
@@ -204,7 +205,7 @@ function check(statements: LineStatement[], shapes: Map<string, ShapeFrame>) {
 
 // 線に向ける線の当て先。線の中点(弧なら頂点)を狙う。線がラベルの下地を通っていれば(ラベルが線の上にあれば)、
 // ラベルに当てる。当てる点を動かすのは、中点での接線の上(弧でも、間隔の分ならほとんど離れない)。
-// 端は図形と同じく手前(6)で止め、into なら触れさせる
+// 端は手前で止め(ラベルの下地なら図形と同じ 6、線そのものなら線の中心から 10)、into なら触れさせる
 function lineTarget(id: string, { style, from, to, control, labelBox }: PlacedLine): Target {
   const path = { start: from.point, control, end: to.point };
   if (labelBox && crosses(path, labelBox)) {
@@ -216,7 +217,7 @@ function lineTarget(id: string, { style, from, to, control, labelBox }: PlacedLi
   const middle = pointAt(path, 0.5);
   const point = { ...middle, width: 0, height: 0 };
   const touch = style === "double" ? ONTO.double : ONTO.line;
-  return { id, anchor: middle, body: point, inner: point, box: point, margin: LINE.margin, touch, along: { u, length } };
+  return { id, anchor: middle, body: point, inner: point, box: point, margin: ONTO.gap, touch, along: { u, length } };
 }
 
 // 線そのものに当てる端の、当てる点の位置(当てる線の中点から、線に沿って測った長さ)
