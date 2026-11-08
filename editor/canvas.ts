@@ -7,7 +7,7 @@ import * as edit from "./edit.ts";
 import { describeBeside } from "./names.ts";
 import { nearest, slide, slots } from "./snap.ts";
 import type { Slot } from "./snap.ts";
-import { NOTHING } from "./state.ts";
+import { NOTHING, linePick, samePick, shapePick } from "./state.ts";
 import type { Editor } from "./state.ts";
 
 // 図の周りに取る、ドラッグ用の余白
@@ -109,12 +109,12 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
     const root = svg();
     if (!root) return;
     const shapes = editor.selectedShapes;
-    const line = editor.selection.kind === "line" ? String(editor.selection.index) : null;
+    const lines = editor.selectedLines.map(String);
     for (const group of root.querySelectorAll("g.shape")) {
       group.classList.toggle("selected", shapes.includes(group.getAttribute("data-id") ?? ""));
     }
     for (const group of root.querySelectorAll("g.line")) {
-      group.classList.toggle("selected", group.getAttribute("data-line") === line);
+      group.classList.toggle("selected", lines.includes(group.getAttribute("data-line") ?? ""));
     }
   }
 
@@ -130,24 +130,32 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
     if (!root || !scene || !document || editor.broken || event.button !== 0) return;
     const target = event.target as Element;
 
+    // Shift を押していれば、選んでいるものに足す(選んでいれば外す)。図形と線を混ぜて選べる
+    const toggle = (pick: edit.Pick) => {
+      const before = editor.selection;
+      return before.some((other) => samePick(other, pick))
+        ? before.filter((other) => !samePick(other, pick))
+        : [...before, pick];
+    };
+
     const lineGroup = target.closest("g.line");
     if (lineGroup) {
-      editor.select({ kind: "line", index: Number(lineGroup.getAttribute("data-line")) });
+      const pick = linePick(Number(lineGroup.getAttribute("data-line")));
+      editor.select(event.shiftKey ? toggle(pick) : [pick]);
       return;
     }
     const group = target.closest("g.shape");
     if (!group) {
-      editor.select(NOTHING);
+      if (!event.shiftKey) editor.select(NOTHING);
       return;
     }
 
     const id = group.getAttribute("data-id")!;
     const before = editor.selectedShapes;
-    const narrow = !event.shiftKey && before.includes(id) && before.length > 1;
-    let ids: string[];
-    if (event.shiftKey) ids = before.includes(id) ? before.filter((other) => other !== id) : [...before, id];
-    else ids = before.includes(id) ? before : [id];
-    editor.select(ids.length > 0 ? { kind: "shapes", ids } : NOTHING);
+    const narrow = !event.shiftKey && before.includes(id) && editor.selection.length > 1;
+    if (event.shiftKey) editor.select(toggle(shapePick(id)));
+    else if (!before.includes(id)) editor.select([shapePick(id)]);
+    const ids = editor.selectedShapes;
 
     const shape = scene.shapes.find((other) => other.id === id)!;
     const moving = new Set(ids.includes(id) && ids.length > 1 ? ids : [id]);
@@ -204,7 +212,7 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
     drag = null;
     if (!current) return;
     if (!current.moved) {
-      if (current.narrow) editor.select({ kind: "shapes", ids: [current.shape.id] });
+      if (current.narrow) editor.select([shapePick(current.shape.id)]);
       return;
     }
     if (!current.target) {

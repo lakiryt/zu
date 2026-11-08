@@ -18,6 +18,7 @@ export function createToolbar(toolbar: HTMLElement, editor: Editor, openFile: ()
   function render() {
     const usable = !editor.broken;
     const count = editor.selectedShapes.length;
+    const picked = editor.selection.length;
     toolbar.replaceChildren(
       html(
         "div",
@@ -29,7 +30,11 @@ export function createToolbar(toolbar: HTMLElement, editor: Editor, openFile: ()
         { class: "group" },
         button("段を揃える", () => align(editor, "row"), enabledIf(usable && count >= 2, "選んだ図形を同じ高さに")),
         button("列を揃える", () => align(editor, "column"), enabledIf(usable && count >= 2, "選んだ図形を同じ左右の位置に")),
-        button("線でつなぐ", () => connect(editor), enabledIf(usable && count === 2, "先に選んだ図形から後に選んだ図形へ")),
+        button(
+          "線でつなぐ",
+          () => connect(editor),
+          enabledIf(usable && picked === 2, "先に選んだものから後に選んだものへ(図形でも線でも)"),
+        ),
       ),
       html(
         "div",

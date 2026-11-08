@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { connect, removeSelected } from "../editor/actions.ts";
 import * as edit from "../editor/edit.ts";
 import { History } from "../editor/history.ts";
 import { relocate, removeShape } from "../editor/relocate.ts";
-import { Editor } from "../editor/state.ts";
+import { Editor, linePick, shapePick } from "../editor/state.ts";
 import { nearest, placementsFor, slide, slots } from "../editor/snap.ts";
 import { DEFAULT_GAP, defaultGap, layout } from "../src/layout/layout.ts";
 import { parse } from "../src/syntax/parser.ts";
@@ -193,7 +194,7 @@ test("lines follow renames and disappear with their shapes", () => {
   const text = "text a\ntext b below a\na ---> b \"x\"\n";
   assert.equal(edit.rename(text, parse(text), "b", "代理人"), 'text a\ntext 代理人 below of a\na ---> 代理人 "x"\n');
   assert.doesNotMatch(removeShape(text, "b"), /--->/);
-  const added = edit.addLine(text, "b", "a");
+  const added = edit.connect(text, parse(text), { kind: "shape", id: "b" }, { kind: "shape", id: "a" });
   assert.match(added, /^b --- a$/m);
   const document = parse(added);
   const line = edit.statementsOf(document, "line")[1]!;
@@ -242,7 +243,7 @@ test("the editor keeps the text as the source and refuses edits that break it", 
   const changes: string[] = [];
   editor.listen((change) => changes.push(change));
   editor.reload();
-  editor.select({ kind: "shapes", ids: ["a", "b"] });
+  editor.select([shapePick("a"), shapePick("b")]);
   assert.deepEqual(changes, ["text", "selection"]);
 
   // 循環になる書き換えは入れず、理由を出す
@@ -252,7 +253,7 @@ test("the editor keeps the text as the source and refuses edits that break it", 
 
   // 消えた図形は選んでいるものから外れる
   editor.commit("text a\n");
-  assert.deepEqual(editor.selection, { kind: "shapes", ids: ["a"] });
+  assert.deepEqual(editor.selection, [shapePick("a")]);
   editor.undo();
   assert.equal(editor.text, "text a\ntext b below a\n");
 });
@@ -271,18 +272,25 @@ test("captions are added, changed and removed by their order", () => {
 
 test("an arrow is drawn from a shape to a line, naming the line if it has no name", () => {
   const text = "text b\ntext c right of b\ntext x above b\nb ---> c\n";
-  const pointed = edit.pointAtLine(text, parse(text), "x", 0);
+  const pointed = edit.connect(text, parse(text), shapePick("x"), linePick(0));
   assert.equal(pointed, "text b\ntext c right of b\ntext x above b\nb ---> c as 線1\nx ---> 線1\n");
   // 名前があればそのまま使う
   const named = "text b\ntext c\ntext x\nb --- c as f\n";
-  assert.match(edit.pointAtLine(named, parse(named), "x", 0), /^x ---> f$/m);
+  assert.match(edit.connect(named, parse(named), shapePick("x"), linePick(0)), /^x ---> f$/m);
+  // 線から図形へ、線から線へも結べる。名前のない線には、重ならない名前を付ける
+  const two = "text a\ntext b\ntext c\ntext d\na --- b\nc --- d\n";
+  assert.equal(
+    edit.connect(two, parse(two), linePick(0), linePick(1)),
+    "text a\ntext b\ntext c\ntext d\na --- b as 線1\nc --- d as 線2\n線1 ---> 線2\n",
+  );
+  assert.match(edit.connect(two, parse(two), linePick(1), shapePick("a")), /^線1 --- a$/m);
   // 図形と線の名前は同じ空間で、新しい名前はどちらとも重ならない
   assert.equal(edit.freshId(parse("text 線1\ntext a\ntext b\na --- b as 線2\n"), "線"), "線3");
 });
 
 test("removing a line or a shape also removes the lines pointed at it", () => {
   const text = "text b\ntext c\ntext x\ntext y\nb --- c as f\nx ---> f as g\ny ---> g\nx --- y\n";
-  assert.equal(edit.removeLine(text, parse(text), 0), "text b\ntext c\ntext x\ntext y\nx --- y\n");
+  assert.equal(edit.removeLines(text, parse(text), [0]), "text b\ntext c\ntext x\ntext y\nx --- y\n");
   const withoutB = removeShape(text, "b");
   assert.doesNotMatch(withoutB, /--->/);
   assert.match(withoutB, /^x --- y$/m);
@@ -307,4 +315,19 @@ test("reversing a line swaps what it joins and the side it bends to, keeping hea
   const after = control(print(edit.reverseLine(plain)));
   close(before.x, after.x);
   close(before.y, after.y);
+});
+
+test("a line and a shape can be picked together, joined in the order picked, and removed together", () => {
+  const editor = new Editor("text a\ntext b right of a\ntext x below a\na --- b\n", () => {});
+  editor.reload();
+  editor.select([linePick(0), shapePick("x")]);
+  connect(editor);
+  assert.match(editor.text, /^a --- b as 線1$/m);
+  assert.match(editor.text, /^線1 --- x$/m);
+  assert.deepEqual(editor.selection, [linePick(1)]);
+  // 線を消すと、その線に向けた線も消える。図形も一緒に消せる
+  editor.select([linePick(0), shapePick("x")]);
+  removeSelected(editor);
+  assert.equal(editor.text, "text a\ntext b right of a\n");
+  assert.deepEqual(editor.selection, []);
 });

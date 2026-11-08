@@ -3,12 +3,19 @@
 import { ZuError, layout, parse } from "../src/index.ts";
 import type { Document, Scene } from "../src/index.ts";
 import { EditError } from "./edit.ts";
+import type { Pick } from "./edit.ts";
 import { History } from "./history.ts";
 
-// 選んでいるもの。図形はいくつでも選べ(Shift)、線は1本だけ。図形と線は同時には選ばない
-export type Selection = { kind: "none" } | { kind: "shapes"; ids: string[] } | { kind: "line"; index: number };
+// 選んでいるもの。図形と線を、選んだ順に並べる(Shift で足す)。線でつなぐときは、先に選んだほうから引く
+export type Selection = Pick[];
 
-export const NOTHING: Selection = { kind: "none" };
+export const NOTHING: Selection = [];
+
+export const samePick = (a: Pick, b: Pick) =>
+  a.kind === "shape" ? b.kind === "shape" && a.id === b.id : b.kind === "line" && a.index === b.index;
+
+export const shapePick = (id: string): Pick => ({ kind: "shape", id });
+export const linePick = (index: number): Pick => ({ kind: "line", index });
 
 export type Change = "text" | "selection";
 
@@ -127,20 +134,28 @@ export class Editor {
     this.#emit("selection");
   }
 
-  // 選んでいる図形(線を選んでいるときは空)
+  // 選んでいる図形の名前(選んだ順)
   get selectedShapes() {
-    return this.selection.kind === "shapes" ? this.selection.ids : [];
+    return this.selection.flatMap((pick) => (pick.kind === "shape" ? [pick.id] : []));
+  }
+
+  // 選んでいる線の番号(選んだ順)
+  get selectedLines() {
+    return this.selection.flatMap((pick) => (pick.kind === "line" ? [pick.index] : []));
+  }
+
+  // 線を1本だけ選んでいれば、その番号
+  get selectedLine() {
+    const [only, ...rest] = this.selection;
+    return only?.kind === "line" && rest.length === 0 ? only.index : null;
   }
 
   #reconcile(selection: Selection): Selection {
     const scene = this.scene;
     if (!scene) return NOTHING;
-    if (selection.kind === "shapes") {
-      const ids = selection.ids.filter((id) => scene.shapes.some((shape) => shape.id === id));
-      return ids.length > 0 ? { kind: "shapes", ids } : NOTHING;
-    }
-    if (selection.kind === "line" && selection.index >= scene.lines.length) return NOTHING;
-    return selection;
+    return selection.filter((pick) =>
+      pick.kind === "shape" ? scene.shapes.some((shape) => shape.id === pick.id) : pick.index < scene.lines.length,
+    );
   }
 
   #emit(change: Change) {

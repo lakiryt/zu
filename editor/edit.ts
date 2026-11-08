@@ -198,12 +198,41 @@ export function leaveAlign(text: string, document: Document, axis: Axis, id: str
 
 const lineEnd = (id: string, head: LineEnd["head"] = "none"): LineEnd => ({ id, at: NOWHERE, head, into: false });
 
-export function addLine(text: string, from: string, to: string) {
-  return append(text, {
+// 図で選んで指すもの。図形は名前、線は書いた順の番号(図の data-line と同じ)
+export type Pick = { kind: "shape"; id: string } | { kind: "line"; index: number };
+
+// from から to へ線を引く。どちらも図形か線。名前のない線には名前(as 線1 など)を付けてから結ぶ。
+// 線へ向けるときは矢印にする。新しい線は最後の線になる
+export function connect(text: string, document: Document, from: Pick, to: Pick) {
+  const lines = statementsOf(document, "line");
+  const used = names(document);
+  const given = new Map<LineStatement, string>();
+  const nameOf = (pick: Pick) => {
+    if (pick.kind === "shape") return pick.id;
+    const line = lines[pick.index];
+    if (!line) throw new EditError("結ぶ線が見つかりません");
+    if (line.id !== null) return line.id;
+    if (!given.has(line)) {
+      let n = 1;
+      while (used.has(`線${n}`)) n++;
+      used.add(`線${n}`);
+      given.set(line, `線${n}`);
+    }
+    return given.get(line)!;
+  };
+  const a = nameOf(from);
+  const b = nameOf(to);
+  const named =
+    given.size === 0
+      ? text
+      : rewrite(text, document, (statement) =>
+          statement.kind === "line" && given.has(statement) ? { ...statement, id: given.get(statement)! } : undefined,
+        );
+  return append(named, {
     kind: "line",
     style: "solid",
-    from: lineEnd(from),
-    to: lineEnd(to),
+    from: lineEnd(a),
+    to: lineEnd(b, to.kind === "line" ? "open" : "none"),
     label: null,
     id: null,
     bend: null,
@@ -224,25 +253,6 @@ export function reverseLine(statement: LineStatement): LineStatement {
   };
 }
 
-// 図形 from から index 番目の線へ矢印を引く。線に名前がなければ付ける。新しい線は最後の線になる
-export function pointAtLine(text: string, document: Document, from: string, index: number) {
-  const target = statementsOf(document, "line")[index];
-  if (!target) return text;
-  const name = target.id ?? freshId(document, "線");
-  const named = target.id === null ? replaceNth(text, document, "line", index, { ...target, id: name }) : text;
-  return append(named, {
-    kind: "line",
-    style: "solid",
-    from: lineEnd(from),
-    to: lineEnd(name, "open"),
-    label: null,
-    id: null,
-    bend: null,
-    at: NOWHERE,
-    end: NOWHERE,
-  });
-}
-
 // ids(図形か線の名前)を消すと一緒に消える線。ids に結んだ線と、その線に向けた線(をたどったもの)
 export function attachedLines(document: Document, ids: Iterable<string>) {
   const gone = new Set(ids);
@@ -259,12 +269,15 @@ export function attachedLines(document: Document, ids: Iterable<string>) {
   return result;
 }
 
-// index 番目の線を消す。その線に向けた線も消す
-export function removeLine(text: string, document: Document, index: number) {
-  const target = statementsOf(document, "line")[index];
-  if (!target) return text;
-  const doomed = target.id === null ? new Set<LineStatement>() : attachedLines(document, [target.id]);
-  doomed.add(target);
+// indexes 番目の線を消す。その線に向けた線も消す
+export function removeLines(text: string, document: Document, indexes: number[]) {
+  const all = statementsOf(document, "line");
+  const targets = indexes.flatMap((index) => (all[index] ? [all[index]] : []));
+  const doomed = attachedLines(
+    document,
+    targets.flatMap(({ id }) => (id === null ? [] : [id])),
+  );
+  for (const target of targets) doomed.add(target);
   return rewrite(text, document, (statement) => (statement.kind === "line" && doomed.has(statement) ? null : undefined));
 }
 

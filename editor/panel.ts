@@ -2,11 +2,11 @@
 import { BEND_SIDES, HEADS, JUSTIFICATIONS, LINE_STYLES, SCALES, SHAPES } from "../src/index.ts";
 import type { CaptionStatement, Document, LineStatement, Scale, Shape, ShapeStatement, Size } from "../src/index.ts";
 import { openAbout } from "./about.ts";
-import { align, pointAtLine, removeSelected, setPlacement } from "./actions.ts";
+import { align, connect, pointAtLine, removeSelected, setPlacement } from "./actions.ts";
 import { button, checkbox, choice, html, numberField } from "./dom.ts";
 import * as edit from "./edit.ts";
 import { BEND_NAMES, HEAD_NAMES, JUSTIFY_NAMES, SCALE_NAMES, SHAPE_NAMES, STYLE_NAMES, describeBeside } from "./names.ts";
-import { NOTHING } from "./state.ts";
+import { NOTHING, shapePick } from "./state.ts";
 import type { Editor } from "./state.ts";
 
 // 図形の名前に使える語(SPEC の「語」)
@@ -14,9 +14,9 @@ const WORD = /^[\p{L}_][\p{L}\p{N}_-]*$/u;
 
 const HELP = [
   "ドラッグ: ほかの図形の上下左右に寄せて置く(ほかの図形は動かない)",
-  "Shift+クリック: いくつも選ぶ。まとめてドラッグすると、互いの位置を保って動く",
+  "Shift+クリック: いくつも選ぶ(図形も線も)。図形をまとめてドラッグすると、互いの位置を保って動く",
   "Alt+ドラッグ: 数で置く(間や座標)",
-  "2つ選んで「線でつなぐ」: 線を引く。線をクリックすると種類や矢印を変えられる",
+  "2つ選んで「線でつなぐ」: 先に選んだものから線を引く。線を選べば線へ向ける。線をクリックすると種類や矢印を変えられる",
   "線を選んで「この線へ矢印を引く」: 図形から線へ矢印を引く",
 ];
 
@@ -69,10 +69,11 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
       return;
     }
     if (!document) return;
-    if (selection.kind === "line") lineFields(document, selection.index);
-    else if (selection.kind === "shapes" && selection.ids.length > 1) severalShapes(selection.ids);
-    else if (selection.kind === "shapes") shapeFields(document, selection.ids[0]!);
-    else nothingSelected(document);
+    const [only, ...rest] = selection;
+    if (!only) nothingSelected(document);
+    else if (rest.length > 0) several(document);
+    else if (only.kind === "line") lineFields(document, only.index);
+    else shapeFields(document, only.id);
   }
 
   function nothingSelected(document: Document) {
@@ -116,16 +117,27 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
     return section;
   }
 
-  function severalShapes(ids: string[]) {
-    panel.append(
-      html("p", {}, `${ids.length} 個を選んでいます: ${ids.join("、")}`),
-      html(
-        "div",
-        { class: "row" },
-        button("段を揃える", () => align(editor, "row")),
-        button("列を揃える", () => align(editor, "column")),
-      ),
-    );
+  // いくつか選んでいるとき。選んだ順に並べ、2つなら線でつなげる。図形が2つ以上なら揃えられる
+  function several(document: Document) {
+    const lines = edit.statementsOf(document, "line");
+    const names = editor.selection.map((pick) => {
+      if (pick.kind === "shape") return pick.id;
+      const line = lines[pick.index];
+      return line ? `線(${line.from.id} → ${line.to.id})` : "線";
+    });
+    const pair = editor.selection.length === 2;
+    const actions: HTMLElement[] = [];
+    if (pair) actions.push(button("線でつなぐ", () => connect(editor)));
+    if (editor.selectedShapes.length >= 2) {
+      actions.push(button("段を揃える", () => align(editor, "row")), button("列を揃える", () => align(editor, "column")));
+    }
+    panel.append(html("p", {}, `${names.length} 個を選んでいます(選んだ順): ${names.join("、")}`));
+    if (pair) {
+      panel.append(
+        html("p", { class: "muted" }, "「線でつなぐ」で、先に選んだものから後に選んだものへ線を引きます。線へ向けると矢印になります。"),
+      );
+    }
+    panel.append(html("div", { class: "row" }, ...actions));
   }
 
   function lineFields(document: Document, index: number) {
@@ -231,7 +243,7 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
       if (next === statement.id) return;
       if (!WORD.test(next)) return editor.say("名前には文字、数字、_、- が使えます(先頭は文字か _)");
       if (edit.names(document).has(next)) return editor.say(`「${next}」という名前がすでにあります`);
-      editor.commit(edit.rename(editor.text, document, statement.id, next), { kind: "shapes", ids: [next] });
+      editor.commit(edit.rename(editor.text, document, statement.id, next), [shapePick(next)]);
     });
 
     panel.append(

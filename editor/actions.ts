@@ -3,7 +3,7 @@ import type { Axis, Placement, Shape, ShapeStatement } from "../src/index.ts";
 import * as edit from "./edit.ts";
 import { relocate, removeShape } from "./relocate.ts";
 import type { Move } from "./relocate.ts";
-import { NOTHING } from "./state.ts";
+import { NOTHING, linePick, shapePick } from "./state.ts";
 import type { Editor } from "./state.ts";
 
 export function addShape(editor: Editor, shape: Shape) {
@@ -20,24 +20,27 @@ export function addShape(editor: Editor, shape: Shape) {
     at: edit.NOWHERE,
     end: edit.NOWHERE,
   };
-  editor.commit(edit.append(editor.text, statement), { kind: "shapes", ids: [id] });
+  editor.commit(edit.append(editor.text, statement), [shapePick(id)]);
 }
 
-// 先に選んだ図形から、後に選んだ図形へ線を引き、その線を選ぶ
+// 先に選んだものから、後に選んだものへ線を引き、その線を選ぶ。図形でも線でもよい
 export function connect(editor: Editor) {
-  const { document } = editor;
-  const [from, to, ...rest] = editor.selectedShapes;
-  if (!document || !from || !to || rest.length > 0) return;
-  const index = edit.statementsOf(document, "line").length;
-  editor.commit(edit.addLine(editor.text, from, to), { kind: "line", index });
+  const [from, to, ...rest] = editor.selection;
+  if (!from || !to || rest.length > 0) return;
+  link(editor, from, to);
 }
 
 // 図形 from から、選んでいる線へ矢印を引き、引いた線を選ぶ
 export function pointAtLine(editor: Editor, from: string) {
-  const { document, selection } = editor;
-  if (!document || selection.kind !== "line") return;
+  const index = editor.selectedLine;
+  if (index !== null) link(editor, shapePick(from), linePick(index));
+}
+
+function link(editor: Editor, from: edit.Pick, to: edit.Pick) {
+  const { document } = editor;
+  if (!document) return;
   const index = edit.statementsOf(document, "line").length;
-  editor.commit(edit.pointAtLine(editor.text, document, from, selection.index), { kind: "line", index });
+  editor.attempt(() => edit.connect(editor.text, document, from, to), [linePick(index)]);
 }
 
 export function align(editor: Editor, axis: Axis) {
@@ -46,15 +49,16 @@ export function align(editor: Editor, axis: Axis) {
   editor.commit(edit.addAlign(editor.text, document, axis, editor.selectedShapes));
 }
 
-// 選んでいる線か図形を消す。図形を消してもほかの図形は動かない
+// 選んでいる線と図形を消す。線を先に消す(図形を消すと線の番号がずれるので)。図形を消してもほかの図形は動かない
 export function removeSelected(editor: Editor) {
-  const { document, selection } = editor;
-  if (!document) return;
-  if (selection.kind === "line") {
-    editor.commit(edit.removeLine(editor.text, document, selection.index), NOTHING);
-  } else if (selection.kind === "shapes") {
-    editor.attempt(() => selection.ids.reduce((text, id) => removeShape(text, id), editor.text), NOTHING);
-  }
+  const { document } = editor;
+  if (!document || editor.selection.length === 0) return;
+  const lines = editor.selectedLines;
+  const shapes = editor.selectedShapes;
+  editor.attempt(
+    () => shapes.reduce((text, id) => removeShape(text, id), edit.removeLines(editor.text, document, lines)),
+    NOTHING,
+  );
 }
 
 // 図形を動かす。moved 以外の図形はその場に残す

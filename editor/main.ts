@@ -7,7 +7,7 @@ import { element } from "./dom.ts";
 import * as edit from "./edit.ts";
 import { createPanel } from "./panel.ts";
 import { SAMPLES } from "./samples.ts";
-import { Editor, NOTHING } from "./state.ts";
+import { Editor, NOTHING, linePick, samePick, shapePick } from "./state.ts";
 import { createToolbar } from "./toolbar.ts";
 
 // 作業中の文字は、このブラウザにだけ覚える。初めて開いたときは最初のサンプルを出す
@@ -72,14 +72,10 @@ function selectFromCursor() {
   const line = source.value.slice(0, source.selectionStart).split("\n").length;
   const id = edit.shapeAtLine(document, line);
   const index = edit.indexAtLine(document, "line", line);
-  const { selection } = editor;
-  if (id !== null) {
-    if (selection.kind !== "shapes" || selection.ids.length !== 1 || selection.ids[0] !== id) {
-      editor.select({ kind: "shapes", ids: [id] });
-    }
-  } else if (index !== null) {
-    if (selection.kind !== "line" || selection.index !== index) editor.select({ kind: "line", index });
-  }
+  const pick = id !== null ? shapePick(id) : index !== null ? linePick(index) : null;
+  if (!pick) return;
+  const [only, ...rest] = editor.selection;
+  if (!only || rest.length > 0 || !samePick(only, pick)) editor.select([pick]);
 }
 source.addEventListener("click", selectFromCursor);
 source.addEventListener("keyup", selectFromCursor);
@@ -117,7 +113,7 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     editor.redo();
   } else if (event.key === "Delete" || event.key === "Backspace") {
-    if (editor.selection.kind !== "none") {
+    if (editor.selection.length > 0) {
       event.preventDefault();
       removeSelected(editor);
     }
