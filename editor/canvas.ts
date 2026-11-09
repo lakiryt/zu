@@ -10,8 +10,10 @@ import type { Slot } from "./snap.ts";
 import { NOTHING, linePick, samePick, shapePick } from "./state.ts";
 import type { Editor } from "./state.ts";
 
-// 図の周りに取る、ドラッグ用の余白
+// 図の周りに取る、ドラッグ用の余白。幅の狭い画面では、図を大きく見せるため狭くする
 const MARGIN = 120;
+const NARROW_MARGIN = 48;
+const narrowScreen = matchMedia("(max-width: 900px)");
 // この距離(図の単位)まで近づけば吸着する
 const SNAP_RADIUS = 56;
 // これより小さい動きはクリックとみなす
@@ -58,14 +60,15 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
     }
     stage.innerHTML = toSvg(scene);
     const root = svg()!;
-    const width = scene.width + MARGIN * 2;
-    const height = scene.height + MARGIN * 2;
-    root.setAttribute("viewBox", `${-MARGIN} ${-MARGIN} ${width} ${height}`);
+    const margin = narrowScreen.matches ? NARROW_MARGIN : MARGIN;
+    const width = scene.width + margin * 2;
+    const height = scene.height + margin * 2;
+    root.setAttribute("viewBox", `${-margin} ${-margin} ${width} ${height}`);
     root.setAttribute("width", String(width));
     root.setAttribute("height", String(height));
     const background = root.querySelector("rect");
-    background?.setAttribute("x", String(-MARGIN));
-    background?.setAttribute("y", String(-MARGIN));
+    background?.setAttribute("x", String(-margin));
+    background?.setAttribute("y", String(-margin));
 
     // 図の範囲(書き出す SVG の大きさ)を薄く示す
     root.insertBefore(
@@ -129,8 +132,9 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
     const { scene, document } = editor;
     if (!root || !scene || !document || editor.broken || event.button !== 0) return;
     const target = event.target as Element;
+    const adding = event.shiftKey || editor.adding;
 
-    // Shift を押していれば、選んでいるものに足す(選んでいれば外す)。図形と線を混ぜて選べる
+    // Shift を押していれば(「まとめて選ぶ」の間も)、選んでいるものに足す(選んでいれば外す)。図形と線を混ぜて選べる
     const toggle = (pick: edit.Pick) => {
       const before = editor.selection;
       return before.some((other) => samePick(other, pick))
@@ -142,26 +146,26 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
     const note = target.closest("g[data-annotation]");
     if (note) {
       const pick = shapePick(note.getAttribute("data-target")!);
-      editor.select(event.shiftKey ? toggle(pick) : [pick]);
+      editor.select(adding ? toggle(pick) : [pick]);
       return;
     }
 
     const lineGroup = target.closest("g.line");
     if (lineGroup) {
       const pick = linePick(Number(lineGroup.getAttribute("data-line")));
-      editor.select(event.shiftKey ? toggle(pick) : [pick]);
+      editor.select(adding ? toggle(pick) : [pick]);
       return;
     }
     const group = target.closest("g.shape");
     if (!group) {
-      if (!event.shiftKey) editor.select(NOTHING);
+      if (!adding) editor.select(NOTHING);
       return;
     }
 
     const id = group.getAttribute("data-id")!;
     const before = editor.selectedShapes;
-    const narrow = !event.shiftKey && before.includes(id) && editor.selection.length > 1;
-    if (event.shiftKey) editor.select(toggle(shapePick(id)));
+    const narrow = !adding && before.includes(id) && editor.selection.length > 1;
+    if (adding) editor.select(toggle(shapePick(id)));
     else if (!before.includes(id)) editor.select([shapePick(id)]);
     const ids = editor.selectedShapes;
 
@@ -304,6 +308,11 @@ export function createCanvas(stage: HTMLElement, editor: Editor) {
       placement,
     });
   }
+
+  // 画面の幅が変わって余白が変わるときは描き直す(ドラッグ中は描き直さない)
+  narrowScreen.addEventListener("change", () => {
+    if (!drag) draw();
+  });
 
   return { draw, drawSelection };
 }

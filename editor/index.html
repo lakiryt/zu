@@ -61,8 +61,14 @@
         Law図(ローズ)は、文字で書いた図を SVG にするエディタです。JavaScript を有効にすると使えます。
       </p>
     </noscript>
-    <main>
-      <section class="source">
+    <!-- 幅の狭い画面(スマホ)では、図を上に大きく出し、下の欄で文字と設定を切り替える。広い画面ではタブを出さない -->
+    <main data-pane="source">
+      <nav class="tabs" role="tablist" aria-label="下の欄">
+        <button type="button" role="tab" data-pane="source" aria-controls="pane-source">文字</button>
+        <button type="button" role="tab" data-pane="panel" aria-controls="panel">設定</button>
+        <button type="button" class="tabs-fold" data-pane="none" aria-label="下の欄をたたんで図を広げる">図を広げる</button>
+      </nav>
+      <section class="source" id="pane-source">
         <label class="samples">
           <span>サンプル</span>
           <select id="samples" aria-label="サンプルを開く"></select>

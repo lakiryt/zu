@@ -604,9 +604,154 @@ main {
   }
 }
 
+/* 下の欄のタブ。幅の狭い画面でだけ出す */
+.tabs {
+  display: none;
+}
+
+/* 「まとめて選ぶ」は Shift の代わり。タッチの画面でだけ出す */
+.touch-only {
+  display: none;
+}
+
+button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+@media (pointer: coarse) {
+  .touch-only {
+    display: inline-block;
+  }
+}
+
+/* 幅の狭い画面(スマホ)。図を上に大きく出し、下の欄で文字と設定を切り替える。
+   下の欄の高さは中身によらず決めておき、タブを替えても図の大きさが変わらないようにする */
 @media (max-width: 900px) {
+  body {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  header {
+    gap: 8px;
+    padding: 6px 8px;
+  }
+
+  .brand .name {
+    font-size: 18px;
+  }
+
+  /* 道具は一列に並べ、はみ出す分は横に送る */
+  #toolbar {
+    flex: 1;
+    min-width: 0;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  #toolbar .group {
+    flex: none;
+  }
+
+  #toolbar button {
+    white-space: nowrap;
+    padding: 6px 10px;
+  }
+
   main {
-    grid-template-columns: 1fr;
-    grid-template-rows: 200px 1fr auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto min(42dvh, 360px);
+    grid-template-areas: "canvas" "tabs" "pane";
+  }
+
+  main[data-pane="none"] {
+    grid-template-rows: minmax(0, 1fr) auto 0;
+  }
+
+  .canvas {
+    grid-area: canvas;
+    overflow: hidden;
+  }
+
+  /* 図は欄に収まるよう縮める(縦も横も)。指でなぞっても欄が動かないので、送らずに全体を見せる */
+  #stage {
+    height: 100%;
+    padding: 4px;
+  }
+
+  #stage svg {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+  }
+
+  #status {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    margin: 0;
+    display: block;
+    width: fit-content;
+    max-width: calc(100% - 16px);
+  }
+
+  .tabs {
+    grid-area: tabs;
+    display: flex;
+    gap: 4px;
+    padding: 0 8px;
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .tabs button {
+    padding: 10px 14px 8px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--muted);
+  }
+
+  .tabs button[aria-selected="true"] {
+    border-bottom-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .tabs .tabs-fold {
+    margin-left: auto;
+    font-size: 12px;
+  }
+
+  main[data-pane="none"] .tabs-fold {
+    display: none;
+  }
+
+  .source,
+  #panel {
+    grid-area: pane;
+    min-height: 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  main:not([data-pane="source"]) .source,
+  main:not([data-pane="panel"]) #panel {
+    display: none;
+  }
+
+  /* iOS は 16px より小さい欄に触れると画面を拡大するので、欄の字は 16px にする */
+  #source,
+  .samples select,
+  .field input,
+  .field select,
+  .field textarea {
+    font-size: 16px;
   }
 }

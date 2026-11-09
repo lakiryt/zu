@@ -28,6 +28,12 @@ export function createToolbar(toolbar: HTMLElement, editor: Editor, openFile: ()
       html(
         "div",
         { class: "group" },
+        // Shift の代わり。押している間は、触れた図形や線を選んでいるものに足していく
+        button("まとめて選ぶ", () => editor.setAdding(!editor.adding), {
+          class: "touch-only",
+          "aria-pressed": String(editor.adding),
+          title: "触れた図形や線を、選んでいるものに足していく",
+        }),
         button("段を揃える", () => align(editor, "row"), enabledIf(usable && count >= 2, "選んだ図形を同じ高さに")),
         button("列を揃える", () => align(editor, "column"), enabledIf(usable && count >= 2, "選んだ図形を同じ左右の位置に")),
         button(

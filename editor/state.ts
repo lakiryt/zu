@@ -30,6 +30,8 @@ export class Editor {
   broken = false;
   error = "";
   selection: Selection = NOTHING;
+  // Shift を押したままのように、選ぶたびに足していく(タッチの画面には Shift がないので、ボタンで切り替える)
+  adding = false;
   fileName = "diagram.zu";
   readonly history = new History();
 
@@ -131,6 +133,11 @@ export class Editor {
 
   select(selection: Selection) {
     this.selection = this.#reconcile(selection);
+    this.#emit("selection");
+  }
+
+  setAdding(adding: boolean) {
+    this.adding = adding;
     this.#emit("selection");
   }
 

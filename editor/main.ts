@@ -19,6 +19,8 @@ const errorBox = element<HTMLDivElement>("error");
 const status = element<HTMLDivElement>("status");
 const fileInput = element<HTMLInputElement>("file");
 const samples = element<HTMLSelectElement>("samples");
+const stage = element<HTMLDivElement>("stage");
+const main = document.querySelector("main")!;
 const SAMPLE = SAMPLES[0]!.source;
 
 function load() {
@@ -45,7 +47,7 @@ function say(message: string) {
 }
 
 const editor = new Editor(load(), say);
-const canvas = createCanvas(element("stage"), editor);
+const canvas = createCanvas(stage, editor);
 const panel = createPanel(element("panel"), editor);
 const toolbar = createToolbar(element("toolbar"), editor, () => fileInput.click());
 
@@ -64,6 +66,30 @@ editor.listen((change) => {
 });
 
 source.addEventListener("input", () => editor.type(source.value));
+
+// 幅の狭い画面の下の欄。"source" は文字、"panel" は設定、"none" はたたんで図を広げる。
+// 広い画面ではタブを出さず、文字と設定を両方出す(この値は見た目に効かない)
+type Pane = "source" | "panel" | "none";
+const tabs = [...main.querySelectorAll<HTMLButtonElement>(".tabs button")];
+function showPane(pane: Pane) {
+  main.dataset.pane = pane;
+  for (const tab of tabs) {
+    if (tab.getAttribute("role") === "tab") tab.setAttribute("aria-selected", String(tab.dataset.pane === pane));
+  }
+}
+for (const tab of tabs) tab.addEventListener("click", () => showPane(tab.dataset.pane as Pane));
+showPane("source");
+
+// 図の図形や線に触れて選んだら、下の欄を設定に替える。たたんであるときは開かない(図の大きさを変えない)。
+// ドラッグの途中で替えないよう、指を離してから替える
+let touched: { x: number; y: number } | null = null;
+stage.addEventListener("pointerdown", (event) => (touched = { x: event.clientX, y: event.clientY }));
+stage.addEventListener("pointerup", (event) => {
+  const start = touched;
+  touched = null;
+  if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) return;
+  if (main.dataset.pane === "source" && editor.selection.length > 0) showPane("panel");
+});
 
 // 文字のカーソルがある行の図形か線を選ぶ
 function selectFromCursor() {
