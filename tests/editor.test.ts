@@ -341,3 +341,17 @@ test("annotations follow renames and disappear with their shapes", () => {
   assert.doesNotMatch(removeShape(text, "a"), /says/);
   assert.match(removeShape(text, "a"), /^b note "無資力"$/m);
 });
+
+test("a tree is edited as one statement with its item lines", () => {
+  const text = "text a\ntree t below a\n- 1\n  - 2 %% 注\ntext b\n";
+  const document = parse(text);
+  assert.equal(edit.shapeAtLine(document, 4), "t");
+  assert.equal(edit.shapeAtLine(document, 5), "b");
+  const t = edit.findShape(document, "t")!;
+  assert.equal(
+    edit.replaceShape(text, document, { ...t, label: "根" }),
+    'text a\ntree t "根" below of a\n- 1\n  - 2 %% 注\ntext b\n',
+  );
+  assert.equal(edit.rename(text, document, "a", "本人"), "text 本人\ntree t below of 本人\n- 1\n  - 2 %% 注\ntext b\n");
+  assert.equal(removeShape(text, "t").includes("- "), false);
+});

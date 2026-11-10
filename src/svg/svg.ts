@@ -91,6 +91,18 @@ function drawShape({ label: content, box, geometry }: PlacedShape) {
         label((y + labelTop + y + height) / 2),
       ].join("");
     }
+
+    case "tree": {
+      // 項目は列の左に揃えて書く。線は字より先に描く
+      const d = geometry.strokes
+        .map(([a, b]) => `M${round(x + a.x)},${round(y + a.y)} L${round(x + b.x)},${round(y + b.y)}`)
+        .join(" ");
+      const lines = d === "" ? "" : `<path d="${d}" fill="none" stroke="${STROKE}" stroke-width="${STROKE_WIDTH.solid}" stroke-linecap="round"/>`;
+      const items = geometry.nodes.map(({ label: item, box: node }) =>
+        text(item, x + node.x, y + node.y + node.height / 2, "left"),
+      );
+      return [lines, ...items].join("");
+    }
   }
 }
 

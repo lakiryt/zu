@@ -19,6 +19,7 @@ export type { Box, Path, Point } from "./geometry.ts";
 export type { PlacedEnd, PlacedLine } from "./lines.ts";
 export { DEFAULT_GAP, defaultGap } from "./position.ts";
 export type { Geometry } from "./size.ts";
+export type { TreeNode } from "./tree.ts";
 
 // anchor は図形の本体(ラベルを除く)の中心。at、相対配置の揃え、align はこの点で決まる
 // label は図形に書くラベル(なければ null)

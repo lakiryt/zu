@@ -55,6 +55,7 @@ export type {
   SourcePosition,
   Spot,
   Statement,
+  TreeItem,
 } from "./syntax/ast.ts";
 
 // 配置
@@ -71,6 +72,7 @@ export type {
   Point,
   Scene,
   Tail,
+  TreeNode,
 } from "./layout/layout.ts";
 
 // 描画

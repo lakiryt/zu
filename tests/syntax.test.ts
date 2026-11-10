@@ -273,3 +273,64 @@ test("an annotation is a remark or a note on a shape, with an optional place", (
   assertError('a says "x" above below', 1, 18, /斜めは above right のように/);
   assertError('a says "x" left right', 1, 17, /注釈の文には「right」を書けません/);
 });
+
+test("a dash at the head of a line is a tree item, written plain or quoted", () => {
+  assert.deepEqual(kinds('tree t\n- 物権 %% 注\n  - "a\\nb"\n'), [
+    "word:tree",
+    "word:t",
+    "newline:\n",
+    "item:物権",
+    "newline:\n",
+    "item:",
+    "string:a\nb",
+    "newline:\n",
+    "eof:",
+  ]);
+  // 行の途中の - は今までどおり(線の記号、負の数)
+  assert.deepEqual(kinds("a --- b\ntext c at -1 -2"), [
+    "word:a",
+    "arrow:---",
+    "word:b",
+    "newline:\n",
+    "word:text",
+    "word:c",
+    "word:at",
+    "number:-1",
+    "number:-2",
+    "eof:",
+  ]);
+});
+
+const outline = (items: { label: string; children: unknown[] }[]): unknown =>
+  items.map(({ label, children }) =>
+    children.length === 0 ? label : [label, outline(children as { label: string; children: unknown[] }[])],
+  );
+
+test("tree items nest by indentation, with blank and comment lines between them", () => {
+  const source = 'tree t "根" below a\n- 1\n  - a\n\n  - b\n    %% 注\n    - i\n    - ii\n- 2\ntext a\n';
+  const [tree, text] = parse(source).statements as ShapeStatement[];
+  assert.equal(tree!.shape, "tree");
+  assert.equal(tree!.label, "根");
+  assert.deepEqual(outline(tree!.items!), [["1", ["a", ["b", ["i", "ii"]]]], "2"]);
+  assert.deepEqual(tree!.end, { line: 9, column: 4 });
+  assert.equal(text!.id, "a");
+  assert.equal(tree!.items![0]!.children[1]!.at.column, 3);
+});
+
+test("tree items must line up with their siblings and follow a tree", () => {
+  assertError("tree t\n- 1\n    - a\n  - b\n", 4, 3, /字下げ/);
+  assertError("tree t\n  - 1\n- 2\n", 3, 1, /浅く/);
+  assertError("text a\n- 1\n", 2, 1, /tree の文の次の行/);
+  assertError("tree t\ntext a\n", 1, 1, /項目/);
+  assertError("tree t\n-\n", 2, 1, /項目の文字/);
+  assertError('tree t\n- "a" b\n', 2, 7, /書けません/);
+  assertError("tree t size small\n- 1\n", 1, 8, /size/);
+});
+
+test("printing a tree gives back its items, quoting what would read otherwise", () => {
+  const source = 'tree t "根" right of a\n- 1\n  - " a"\n  - "b\\nc"\n- d %% e\n- "f %% g"';
+  const [tree] = parse(source).statements;
+  const printed = print(tree!);
+  assert.equal(printed, 'tree t "根" right of a\n- 1\n  - " a"\n  - "b\\nc"\n- d\n- "f %% g"');
+  assert.deepEqual(outline((parse(printed).statements[0] as ShapeStatement).items!), outline((tree as ShapeStatement).items!));
+});

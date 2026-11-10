@@ -1,7 +1,7 @@
 // 文を zu の文字に戻す。parse の逆で、エディタが文を書き換えるときに使う。
 // 書き方の揺れ(of の有無、数の間の「,」)は一つの形にそろえる
 import { writeArrow } from "./arrow.ts";
-import type { Placement, Size, Statement } from "./ast.ts";
+import type { Placement, Size, Statement, TreeItem } from "./ast.ts";
 
 const ESCAPED: Record<string, string> = { '"': '\\"', "\\": "\\\\", "\n": "\\n" };
 
@@ -60,7 +60,17 @@ export function print(statement: Statement) {
       if (statement.label !== null) parts.push(quote(statement.label));
       if (statement.placement) parts.push(printPlacement(statement.placement));
       if (statement.size) parts.push(printSize(statement.size));
+      if (statement.items) return [parts.join(" "), ...printItems(statement.items, 0)].join("\n");
       break;
   }
   return parts.join(" ");
+}
+
+// 木の項目を、一段に2字ずつ字下げした「- 文字」の行にする。
+// そのままでは読み違える文字(改行、前後の空白、引用符で始まる、コメントの印)は引用符で囲む
+function printItems(items: TreeItem[], depth: number): string[] {
+  return items.flatMap(({ label, children }) => {
+    const plain = !/\n|%%|^\s|\s$|^"/.test(label);
+    return [`${"  ".repeat(depth)}- ${plain ? label : quote(label)}`, ...printItems(children, depth + 1)];
+  });
 }

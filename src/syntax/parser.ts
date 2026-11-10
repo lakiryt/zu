@@ -16,6 +16,7 @@ import type {
   Size,
   SourcePosition,
   Statement,
+  TreeItem,
 } from "./ast.ts";
 import { readArrow } from "./arrow.ts";
 import { tokenize } from "./lexer.ts";
@@ -27,6 +28,7 @@ const NAMES: Record<TokenType, string> = {
   number: "数",
   comma: "「,」",
   arrow: "線の記号",
+  item: "木の項目(- …)",
   newline: "改行",
   eof: "ファイルの終わり",
 };
@@ -64,6 +66,7 @@ export function parse(source: string): Document {
   }
 
   function statement(): Statement {
+    if (peek().type === "item") throw new ZuError("木の項目(- …)は tree の文の次の行から書きます", peek().at);
     const head = expect("word", "図形の種類");
     // 2つ目が線の記号なら線の文(図形の種類や align という名前の図形も結べる)
     if (peek().type === "arrow") return line(head);
@@ -229,8 +232,9 @@ export function parse(source: string): Document {
         placement = option.value === "at" ? at() : beside(option.value, option.at);
       } else if (option.value === "size") {
         if (size) throw new ZuError("size は1つの図形に1つまでです", option.at);
-        // text の大きさは字で決まり、立方体は正面の一辺だけで決まる
+        // text の大きさは字で決まり、木は項目で決まり、立方体は正面の一辺だけで決まる
         if (kind === "text") throw new ZuError("text には size を書けません(大きさは字で決まります)", option.at);
+        if (kind === "tree") throw new ZuError("tree には size を書けません(大きさは項目で決まります)", option.at);
         const next = peek();
         size = sizeOption();
         if (kind === "cube" && size.kind === "numbers" && size.height !== null) {
@@ -241,7 +245,53 @@ export function parse(source: string): Document {
       }
     }
 
+    if (kind === "tree") {
+      const items = treeItems(head);
+      return { kind: "shape", shape: kind, id, label, placement, size, items, at: head.at, end: last().end };
+    }
     return { kind: "shape", shape: kind, id, label, placement, size, at: head.at, end: last().end };
+  }
+
+  // tree の文の次の行から続く「- 文字」の行。空行とコメントの行は挟んでよい。
+  // 前の項目より深く字下げした項目はその子、同じ深さなら兄弟。浅くしたら、同じ深さの祖先の兄弟になる
+  function treeItems(head: Token): TreeItem[] {
+    const roots: TreeItem[] = [];
+    // 今の項目と、その祖先(上の段から)。indent は字下げの字数
+    const path: { indent: number; item: TreeItem }[] = [];
+    for (;;) {
+      let ahead = index;
+      while (tokens[ahead]!.type === "newline") ahead += 1;
+      if (tokens[ahead]!.type !== "item") break;
+      index = ahead;
+      const mark = next();
+      let label = mark.value;
+      if (label === "") {
+        if (peek().type !== "string") throw new ZuError("項目の文字が必要です", mark.at);
+        label = next().value;
+        if (label === "") throw new ZuError("項目の文字が必要です", last().at);
+      }
+      if (!atLineEnd()) throw new ZuError(`項目の文字の後には${describe(peek())}を書けません`, peek().at);
+
+      const indent = mark.at.column - 1;
+      const item: TreeItem = { label, children: [], at: mark.at };
+      const current = path.at(-1);
+      if (current && indent > current.indent) {
+        current.item.children.push(item);
+      } else {
+        while (path.length > 0 && path.at(-1)!.indent > indent) path.pop();
+        if (path.length > 0 && path.at(-1)!.indent !== indent) {
+          throw new ZuError("字下げが、同じ段のほかの項目と合いません", mark.at);
+        }
+        if (current && path.length === 0) {
+          throw new ZuError("最初の項目より浅く字下げした項目は書けません", mark.at);
+        }
+        path.pop();
+        (path.at(-1)?.item.children ?? roots).push(item);
+      }
+      path.push({ indent, item });
+    }
+    if (roots.length === 0) throw new ZuError("tree の次の行から、項目を「- 文字」の形で書きます", head.at);
+    return roots;
   }
 
   function at(): Placement {

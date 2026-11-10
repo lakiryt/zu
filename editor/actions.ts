@@ -17,6 +17,8 @@ export function addShape(editor: Editor, shape: Shape) {
     label: null,
     placement: null,
     size: null,
+    // 木は項目がないと書けないので、二つ置いておく
+    ...(shape === "tree" ? { items: ["項目1", "項目2"].map((label) => ({ label, children: [], at: edit.NOWHERE })) } : {}),
     at: edit.NOWHERE,
     end: edit.NOWHERE,
   };

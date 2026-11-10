@@ -7,7 +7,7 @@
 構文(`src/syntax/`)→ 配置(`src/layout/`)→ 描画(`src/svg/`)の3段。各段は前の段の結果だけを受け取り、後ろの段を知らない。
 
 - `src/syntax/`: 字句解析と構文解析。座標や大きさの計算をしない
-- `src/layout/`: 構文木から図形の外枠(座標と大きさ)と、描くのに要る寸法を決める。SVG を知らない。`layout.ts` が入口で、大きさ(`size.ts`)、位置(`position.ts`)、線(`lines.ts`。中まで伸ばす端は `into.ts`、ラベルの置き場所は `labels.ts`)、注釈(`annotations.ts`)、図の下の文(`captions.ts`)に分かれる。点と枠の計算は `geometry.ts`
+- `src/layout/`: 構文木から図形の外枠(座標と大きさ)と、描くのに要る寸法を決める。SVG を知らない。`layout.ts` が入口で、大きさ(`size.ts`)、位置(`position.ts`)、線(`lines.ts`。中まで伸ばす端は `into.ts`、ラベルの置き場所は `labels.ts`)、木の項目と線(`tree.ts`)、注釈(`annotations.ts`)、図の下の文(`captions.ts`)に分かれる。点と枠の計算は `geometry.ts`
 - `src/svg/`: 配置済みの図形を SVG の文字列にする。大きさや位置を計算し直さない
 - `src/errors.ts`: どの段の誤りも `ZuError`(行と列)で報告する
 - `src/index.ts`: 公開する入口。ほかのプロジェクトは GitHub から入れ、ここ(ビルド後は `dist/index.js`)から読み込む。公開するものを変えたら README も直す

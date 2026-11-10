@@ -4,6 +4,7 @@ import annotations from "../examples/annotations.zu?raw";
 import exchange from "../examples/exchange.zu?raw";
 import property from "../examples/property.zu?raw";
 import revocation from "../examples/revocation.zu?raw";
+import tree from "../examples/tree.zu?raw";
 
 export type Sample = { name: string; file: string; source: string };
 
@@ -14,4 +15,5 @@ export const SAMPLES: Sample[] = [
   { name: "線に向ける線(詐害行為取消)", file: "revocation.zu", source: revocation },
   { name: "曲げた線(同時履行)", file: "exchange.zu", source: exchange },
   { name: "注釈(吹き出しと注記)", file: "annotations.zu", source: annotations },
+  { name: "木(箇条書きの分類)", file: "tree.zu", source: tree },
 ];

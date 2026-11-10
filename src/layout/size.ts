@@ -2,13 +2,17 @@
 import type { Scale, ShapeStatement } from "../syntax/ast.ts";
 import type { Box, Point } from "./geometry.ts";
 import { measureText } from "./measure.ts";
+import { layoutTree } from "./tree.ts";
+import type { TreeNode } from "./tree.ts";
 
 // 図形ごとの描き方に要る寸法。外枠の中のどこに何を描くかは svg 側で決める
 export type Geometry =
   | { shape: "text" }
   | { shape: "parallelogram"; skew: number }
   // 立方体は外枠の上部に描き、ラベルがあればその下に置く。labelTop は外枠の上端からラベルの上端まで
-  | { shape: "cube"; edge: number; depth: number; labelTop: number };
+  | { shape: "cube"; edge: number; depth: number; labelTop: number }
+  // 木は、項目の字の外枠と線を、外枠の左上からの位置で持つ(根のラベルも項目の一つとして入る)
+  | { shape: "tree"; nodes: TreeNode[]; strokes: [Point, Point][] };
 
 // 大きさの語ごとの寸法。書かなければ medium。平行四辺形は高さと最小の幅、立方体は正面の一辺
 const PARALLELOGRAM_SCALES: Record<Scale, { height: number; minWidth: number }> = {
@@ -24,6 +28,7 @@ const CUBE = { depthRatio: 0.3, labelGap: 6 };
 export type Sized = { width: number; height: number; anchorTop: number; geometry: Geometry };
 
 // 図形に書くラベル。text は字そのものが図形なので、省けば名前を書く。ほかの図形は、省くか空ならラベルなし
+// (tree では根のラベル)
 export function labelOf(statement: ShapeStatement): string | null {
   if (statement.shape === "text") return statement.label ?? statement.id;
   return statement.label === "" ? null : statement.label;
@@ -58,6 +63,11 @@ export function sizeOf(statement: ShapeStatement): Sized {
         geometry: { shape: "cube", edge, depth, labelTop: edge + depth + CUBE.labelGap },
       };
     }
+
+    case "tree": {
+      const { width, height, nodes, strokes } = layoutTree(label, statement.items ?? []);
+      return { width, height, anchorTop: height / 2, geometry: { shape: "tree", nodes, strokes } };
+    }
   }
 }
 
@@ -70,6 +80,7 @@ export function frameAt(size: Sized, anchor: Point): { box: Box; body: Box; inne
   const { geometry } = size;
   switch (geometry.shape) {
     case "text":
+    case "tree":
       return { box, body: box, inner: box };
     case "parallelogram": {
       const inner = { ...box, x: box.x + geometry.skew, width: Math.max(0, box.width - geometry.skew * 2) };

@@ -1,5 +1,5 @@
 // 右の欄。選んでいる図形や線の中身を見せ、変えられるようにする
-import { ANNOTATION_KINDS, BEND_SIDES, HEADS, JUSTIFICATIONS, LINE_STYLES, SCALES, SHAPES } from "../src/index.ts";
+import { ANNOTATION_KINDS, BEND_SIDES, HEADS, JUSTIFICATIONS, LINE_STYLES, SCALES, SHAPES, ZuError, parse, print } from "../src/index.ts";
 import type {
   AnnotationStatement,
   CaptionStatement,
@@ -58,13 +58,13 @@ function describePlacement(document: Document, statement: ShapeStatement) {
 
 // 形を変えたとき、その形に書ける大きさに直す。text は書けず、cube は一辺だけ
 function sizeFor(shape: Shape, size: Size | null): Size | null {
-  if (shape === "text") return null;
+  if (shape === "text" || shape === "tree") return null;
   if (shape === "cube" && size?.kind === "numbers") return { ...size, height: null };
   return size;
 }
 
 // 図形のラベルの欄。text はラベルを省くと名前を書くので、名前と同じなら省く。
-// ほかの図形は、空にするとラベルなし
+// ほかの図形は、空にするとラベルなし(木は根のラベルなし)
 function labelField(statement: ShapeStatement, onChange: (label: string | null) => void) {
   if (statement.shape === "text") {
     return textArea(statement.label ?? statement.id, 2, (label) => onChange(label === statement.id ? null : label));
@@ -274,18 +274,24 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
       editor.commit(edit.rename(editor.text, document, statement.id, next), [shapePick(next)]);
     });
 
+    const tree = statement.shape === "tree";
     panel.append(
       html("label", { class: "field" }, "名前", name),
       html(
         "label",
         { class: "field" },
-        "ラベル",
+        tree ? "根のラベル" : "ラベル",
         labelField(statement, (label) => change({ label })),
       ),
-      choice("形", SHAPES, SHAPE_NAMES, statement.shape, (shape) => change({ shape, size: sizeFor(shape, statement.size) })),
+      // 木は項目を持つので、ほかの形とは行き来しない
+      tree
+        ? itemsField(statement, change)
+        : choice("形", SHAPES.filter((shape) => shape !== "tree"), SHAPE_NAMES, statement.shape, (shape) =>
+            change({ shape, size: sizeFor(shape, statement.size) }),
+          ),
     );
     // 大きさは語で選ぶ。中は既定なので書かない。数で書いた大きさは「高度な設定」で変える
-    if (statement.shape !== "text") {
+    if (statement.shape !== "text" && !tree) {
       const { size } = statement;
       const current = size === null ? "medium" : size.kind === "scale" ? size.scale : "numbers";
       const options = current === "numbers" ? (["numbers", ...SCALES] as const) : SCALES;
@@ -327,6 +333,24 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
       advancedFields(statement, change),
       html("div", { class: "row" }, button("この図形を消す", () => removeSelected(editor), { class: "danger" })),
     );
+  }
+
+  // 木の項目。文字の欄と同じ「- 文字」の行で書き、字下げで入れ子にする
+  function itemsField(statement: ShapeStatement, change: (part: Partial<ShapeStatement>) => void) {
+    const lines = print(statement).split("\n").slice(1);
+    const field = textArea(lines.join("\n"), Math.min(12, Math.max(3, lines.length)), (value) => {
+      try {
+        const [parsed, ...rest] = parse(`tree 木\n${value}`).statements;
+        if (parsed?.kind !== "shape" || !parsed.items || rest.length > 0) {
+          return editor.say("項目は「- 文字」の行で書きます");
+        }
+        change({ items: parsed.items });
+      } catch (error) {
+        if (!(error instanceof ZuError)) throw error;
+        editor.say(error.line > 1 ? `項目の${error.line - 1}行目: ${error.reason}` : "項目を「- 文字」の形で1つ以上書きます");
+      }
+    });
+    return html("label", { class: "field" }, "項目(字下げで入れ子にする)", field);
   }
 
   // 図形に紐づく注釈(吹き出しと注記)。書いた順に並べ、文、種類、置き場所を変えられる
@@ -392,7 +416,7 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
       ),
     );
 
-    if (statement.shape !== "text") {
+    if (statement.shape !== "text" && statement.shape !== "tree") {
       const numbers = statement.size?.kind === "numbers" ? statement.size : null;
       const setSize = (part: "width" | "height") => (value: number | null) => {
         const next = { width: numbers?.width ?? null, height: numbers?.height ?? null, [part]: value };

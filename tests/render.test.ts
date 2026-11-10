@@ -503,3 +503,47 @@ test("annotations name a shape", () => {
   fails('text a\nx says "y"', 2, /「x」という図形はありません/);
   fails('text a\ntext b\na --- b as f\nf note "y"', 4, /「f」は線です\(注釈は図形に付けます\)/);
 });
+
+// 木の項目の字の外枠を、字で引けるようにする(木の外枠の左上から)
+const treeNodes = (source: string, id = "t") => {
+  const shape = layout(parse(source)).shapes.find((shape) => shape.id === id)!;
+  assert.equal(shape.geometry.shape, "tree");
+  if (shape.geometry.shape !== "tree") throw new Error();
+  return { shape, nodes: Object.fromEntries(shape.geometry.nodes.map(({ label, box }) => [label, box])), strokes: shape.geometry.strokes };
+};
+const middle = (box: { y: number; height: number }) => box.y + box.height / 2;
+
+test("a tree writes a parent on the row of its first child and lines up each depth in a column", () => {
+  const { nodes } = treeNodes("tree t\n- 1\n  - a\n  - b\n    - i\n    - ii\n- 二番目\n  - c\n");
+  close(middle(nodes["1"]!), middle(nodes["a"]!));
+  close(middle(nodes["b"]!), middle(nodes["i"]!));
+  close(nodes["1"]!.x, nodes["二番目"]!.x);
+  close(nodes["a"]!.x, nodes["c"]!.x);
+  // 子の列は、子を持つ項目のうち最も広いもの(二番目)の右
+  assert.ok(nodes["a"]!.x > nodes["二番目"]!.x + nodes["二番目"]!.width);
+  assert.ok(nodes["i"]!.x > nodes["b"]!.x + nodes["b"]!.width);
+  // 段は上から書いた順で、重ならない
+  const rows = ["a", "i", "ii", "c"].map((label) => nodes[label]!);
+  for (let index = 1; index < rows.length; index++) assert.ok(rows[index]!.y >= rows[index - 1]!.y + rows[index - 1]!.height);
+});
+
+test("a tree without a root label joins several top items with a bracket, or roots at the only one", () => {
+  const several = treeNodes("tree t\n- 1\n- 2\n");
+  // 括弧の縦線は外枠の左端にあり、項目はその右
+  assert.ok(several.strokes.some(([a, b]) => a.x === 0 && b.x === 0 && b.y > a.y));
+  assert.ok(several.nodes["1"]!.x > 0);
+  const single = treeNodes("tree t\n- 1\n  - a\n");
+  close(single.nodes["1"]!.x, 0);
+  assert.ok(single.strokes.every(([a, b]) => a.y === b.y));
+  const rooted = treeNodes('tree t "根"\n- 1\n- 2\n');
+  close(rooted.nodes["根"]!.x, 0);
+  close(middle(rooted.nodes["根"]!), middle(rooted.nodes["1"]!));
+});
+
+test("a tree is placed like other shapes by the center of its outline", () => {
+  const { a, t } = place('text a at 0 0\ntree t right of a\n- 1\n  - 2\n  - 3\n');
+  close(t!.cy, a!.cy);
+  close(t!.x - (a!.x + a!.width), DEFAULT_GAP);
+  close(t!.cy, t!.y + t!.height / 2);
+  assert.match(render("tree t\n- 1\n  - 2\n"), /<g data-id="t"><path d="M[^"]+"[^>]*\/><text text-anchor="start"/);
+});

@@ -2,7 +2,7 @@
 
 export type SourcePosition = { line: number; column: number };
 
-export const SHAPES = ["text", "parallelogram", "cube"] as const;
+export const SHAPES = ["text", "parallelogram", "cube", "tree"] as const;
 export type Shape = (typeof SHAPES)[number];
 
 export const DIRECTIONS = ["left", "right", "above", "below"] as const;
@@ -20,16 +20,21 @@ export type Placement =
   // gap が null なら既定の間を使う
   | { kind: "beside"; direction: Direction; of: string; gap: number | null; at: SourcePosition };
 
+// 木(tree)の項目。「- 文字」の行で、字下げの深い行はその前の浅い行の子になる
+export type TreeItem = { label: string; children: TreeItem[]; at: SourcePosition };
+
 export type ShapeStatement = {
   kind: "shape";
   shape: Shape;
   id: string;
-  // null なら id をラベルにする
+  // null なら id をラベルにする(text の場合。ほかの図形はラベルなし。tree では根のラベル)
   label: string | null;
   placement: Placement | null;
   size: Size | null;
+  // tree の項目(上の段から。tree のときだけ、1つ以上)
+  items?: TreeItem[];
   at: SourcePosition;
-  // 文の最後の字句の直後(行末のコメントは含まない)
+  // 文の最後の字句の直後(行末のコメントは含まない)。tree は最後の項目の直後
   end: SourcePosition;
 };
 

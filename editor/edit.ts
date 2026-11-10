@@ -30,7 +30,7 @@ export function offsetOf(text: string, { line, column }: SourcePosition) {
   return offset + [...current].slice(0, column - 1).join("").length;
 }
 
-// 文ごとに書き換える。fn が undefined を返せばそのまま、null なら行ごと消す、文を返せば置き換える。
+// 文ごとに書き換える。fn が undefined を返せばそのまま、null なら行ごと消す(木は項目の行も)、文を返せば置き換える。
 // 後ろの文から書き換えるので、前の文の位置はずれない
 export function rewrite(text: string, document: Document, fn: (statement: Statement) => Statement | null | undefined) {
   let result = text;
@@ -39,7 +39,7 @@ export function rewrite(text: string, document: Document, fn: (statement: Statem
     if (next === undefined) continue;
     if (next === null) {
       const start = offsetOf(result, { line: statement.at.line, column: 1 });
-      const lineEnd = result.indexOf("\n", start);
+      const lineEnd = result.indexOf("\n", offsetOf(result, { line: statement.end.line, column: 1 }));
       result = result.slice(0, start) + (lineEnd === -1 ? "" : result.slice(lineEnd + 1));
     } else {
       const start = offsetOf(result, statement.at);
@@ -171,9 +171,9 @@ export function rename(text: string, document: Document, from: string, to: strin
   });
 }
 
-// 文字の位置(行)にある図形の名前
+// 文字の位置(行)にある図形の名前。木は項目の行でもよい
 export function shapeAtLine(document: Document, line: number) {
-  return shapes(document).find((statement) => statement.at.line === line)?.id ?? null;
+  return shapes(document).find((statement) => statement.at.line <= line && line <= statement.end.line)?.id ?? null;
 }
 
 // --- 揃え ---
