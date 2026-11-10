@@ -16,6 +16,7 @@ import type {
   Size,
   SourcePosition,
   Statement,
+  TreeBrace,
   TreeItem,
 } from "./ast.ts";
 import { readArrow } from "./arrow.ts";
@@ -29,6 +30,8 @@ const NAMES: Record<TokenType, string> = {
   comma: "「,」",
   arrow: "線の記号",
   item: "木の項目(- …)",
+  open: "括弧の始まり({)",
+  close: "括弧の終わり(})",
   newline: "改行",
   eof: "ファイルの終わり",
 };
@@ -67,6 +70,9 @@ export function parse(source: string): Document {
 
   function statement(): Statement {
     if (peek().type === "item") throw new ZuError("木の項目(- …)は tree の文の次の行から書きます", peek().at);
+    if (peek().type === "open" || peek().type === "close") {
+      throw new ZuError("括弧({ と })は tree の項目の行の間に書きます", peek().at);
+    }
     const head = expect("word", "図形の種類");
     // 2つ目が線の記号なら線の文(図形の種類や align という名前の図形も結べる)
     if (peek().type === "arrow") return line(head);
@@ -246,52 +252,106 @@ export function parse(source: string): Document {
     }
 
     if (kind === "tree") {
-      const items = treeItems(head);
-      return { kind: "shape", shape: kind, id, label, placement, size, items, at: head.at, end: last().end };
+      const { items, braces } = treeItems(head);
+      return {
+        kind: "shape",
+        shape: kind,
+        id,
+        label,
+        placement,
+        size,
+        items,
+        ...(braces.length > 0 ? { braces } : {}),
+        at: head.at,
+        end: last().end,
+      };
     }
     return { kind: "shape", shape: kind, id, label, placement, size, at: head.at, end: last().end };
   }
 
-  // tree の文の次の行から続く「- 文字」の行。空行とコメントの行は挟んでよい。
-  // 前の項目より深く字下げした項目はその子、同じ深さなら兄弟。浅くしたら、同じ深さの祖先の兄弟になる
-  function treeItems(head: Token): TreeItem[] {
+  // 「- 」や「}」の後の文字。引用符で書いたときは、続く文字列の字句から読む
+  function markText(mark: Token) {
+    if (mark.value !== "" || peek().type !== "string") return { text: mark.value, at: mark.at };
+    const string = next();
+    return { text: string.value, at: string.at };
+  }
+
+  // tree の文の次の行から続く「- 文字」の行と、兄弟を括る「{」「}」の行。空行とコメントの行は挟んでよい。
+  // 前の項目より深く字下げした項目はその子、同じ深さなら兄弟。浅くしたら、同じ深さの祖先の兄弟になる。
+  // 括弧は、括る項目と同じ深さに字下げし、同じ親の続いた兄弟を括る
+  function treeItems(head: Token): { items: TreeItem[]; braces: TreeBrace[] } {
     const roots: TreeItem[] = [];
+    const rootBraces: TreeBrace[] = [];
     // 今の項目と、その祖先(上の段から)。indent は字下げの字数
     const path: { indent: number; item: TreeItem }[] = [];
+    // 開いている括弧。owner は括る兄弟の親(null は上の段)、first は最初に括る兄弟の番号
+    const open: { owner: TreeItem | null; indent: number; first: number; at: SourcePosition }[] = [];
+    const childrenOf = (owner: TreeItem | null) => (owner ? owner.children : roots);
+
+    // indent の深さに書いた行が入る兄弟の並びの親(null は上の段)。浅くした分の祖先は path から外す
+    function ownerFor(indent: number, at: SourcePosition): TreeItem | null {
+      const current = path.at(-1);
+      if (current && indent > current.indent) return current.item;
+      while (path.length > 0 && path.at(-1)!.indent > indent) path.pop();
+      if (path.length > 0 && path.at(-1)!.indent !== indent) {
+        throw new ZuError("字下げが、同じ段のほかの項目と合いません", at);
+      }
+      if (current && path.length === 0) throw new ZuError("最初の項目より浅く字下げした項目は書けません", at);
+      return path.at(-2)?.item ?? null;
+    }
+    // indent より深い所で開いた括弧は、もう閉じられない
+    function unclosed(indent: number) {
+      const deeper = open.find((brace) => brace.indent > indent);
+      if (deeper) throw new ZuError("括弧({)が閉じていません(同じ深さに「}」の行を書きます)", deeper.at);
+    }
+
     for (;;) {
       let ahead = index;
       while (tokens[ahead]!.type === "newline") ahead += 1;
-      if (tokens[ahead]!.type !== "item") break;
+      const type = tokens[ahead]!.type;
+      if (type !== "item" && type !== "open" && type !== "close") break;
       index = ahead;
       const mark = next();
-      let label = mark.value;
-      if (label === "") {
-        if (peek().type !== "string") throw new ZuError("項目の文字が必要です", mark.at);
-        label = next().value;
-        if (label === "") throw new ZuError("項目の文字が必要です", last().at);
-      }
-      if (!atLineEnd()) throw new ZuError(`項目の文字の後には${describe(peek())}を書けません`, peek().at);
-
       const indent = mark.at.column - 1;
-      const item: TreeItem = { label, children: [], at: mark.at };
-      const current = path.at(-1);
-      if (current && indent > current.indent) {
-        current.item.children.push(item);
-      } else {
-        while (path.length > 0 && path.at(-1)!.indent > indent) path.pop();
-        if (path.length > 0 && path.at(-1)!.indent !== indent) {
-          throw new ZuError("字下げが、同じ段のほかの項目と合いません", mark.at);
-        }
-        if (current && path.length === 0) {
-          throw new ZuError("最初の項目より浅く字下げした項目は書けません", mark.at);
-        }
-        path.pop();
-        (path.at(-1)?.item.children ?? roots).push(item);
+      unclosed(indent);
+
+      if (type === "open") {
+        if (!atLineEnd()) throw new ZuError(`「{」の行には${describe(peek())}を書けません`, peek().at);
+        const owner = ownerFor(indent, mark.at);
+        open.push({ owner, indent, first: childrenOf(owner).length, at: mark.at });
+        continue;
       }
+
+      const { text, at } = markText(mark);
+      if (!atLineEnd()) throw new ZuError(`${type === "item" ? "項目" : "括弧"}の文字の後には${describe(peek())}を書けません`, peek().at);
+
+      if (type === "close") {
+        const brace = open.at(-1);
+        if (!brace || brace.indent !== indent) throw new ZuError("この「}」と同じ深さで開いた括弧({)がありません", mark.at);
+        const owner = ownerFor(indent, mark.at);
+        if (owner !== brace.owner) throw new ZuError("括弧は同じ親の兄弟だけを括れます", mark.at);
+        const last = childrenOf(owner).length - 1;
+        if (last < brace.first) throw new ZuError("括弧の中に項目がありません", brace.at);
+        open.pop();
+        const placed = { first: brace.first, last, label: text === "" ? null : text, at: brace.at };
+        if (owner) (owner.braces ??= []).push(placed);
+        else rootBraces.push(placed);
+        continue;
+      }
+
+      if (text === "") throw new ZuError("項目の文字が必要です", at);
+      const owner = ownerFor(indent, mark.at);
+      if (open.some((brace) => brace.owner === owner && brace.indent !== indent)) {
+        throw new ZuError("項目の字下げが、括弧({)と合いません", mark.at);
+      }
+      const item: TreeItem = { label: text, children: [], at: mark.at };
+      if (path.at(-1)?.indent === indent) path.pop();
+      childrenOf(owner).push(item);
       path.push({ indent, item });
     }
+    unclosed(-1);
     if (roots.length === 0) throw new ZuError("tree の次の行から、項目を「- 文字」の形で書きます", head.at);
-    return roots;
+    return { items: roots, braces: rootBraces };
   }
 
   function at(): Placement {

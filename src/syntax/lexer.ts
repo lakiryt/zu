@@ -2,11 +2,12 @@ import { ZuError } from "../errors.ts";
 import { isArrow } from "./arrow.ts";
 import type { SourcePosition } from "./ast.ts";
 
-export type TokenType = "word" | "string" | "number" | "comma" | "arrow" | "item" | "newline" | "eof";
+export type TokenType = "word" | "string" | "number" | "comma" | "arrow" | "item" | "open" | "close" | "newline" | "eof";
 
 // end は字句の直後の位置。エディタが文の範囲を書き換えるのに使う。
 // item は木の項目の印(行の頭の「- 」)。value は印の後に引用符なしで書いた文字で、
-// 引用符で書けば空にして、文字列の字句を続ける。字下げの深さは at の列で分かる
+// 引用符で書けば空にして、文字列の字句を続ける。字下げの深さは at の列で分かる。
+// open と close は木の項目を括る括弧(行の頭の「{」と「}」)。close の value は、item と同じく括弧に添える文字
 export type Token = { type: TokenType; value: string; at: SourcePosition; end: SourcePosition };
 
 const WORD_START = /[\p{L}_]/u;
@@ -77,13 +78,13 @@ export function tokenize(source: string): Token[] {
     tokens.push({ type: "string", value, at, end: here() });
   }
 
-  // 「- 」の後の文字。引用符で始まれば、印だけを字句にして、文字列は普段どおり読む。
+  // 「- 」と「}」の後の文字。引用符で始まれば、印だけを字句にして、文字列は普段どおり読む。
   // そうでなければ、行末かコメントまでをそのまま項目の文字にする(後ろの空白は除く)
-  function item(at: SourcePosition) {
+  function item(at: SourcePosition, type: "item" | "close") {
     advance();
     while (blank(peek())) advance();
     if (peek() === '"') {
-      tokens.push({ type: "item", value: "", at, end: here() });
+      tokens.push({ type, value: "", at, end: here() });
       return;
     }
     let value = "";
@@ -93,7 +94,7 @@ export function tokenize(source: string): Token[] {
       value += char;
       if (!blank(char)) end = here();
     }
-    tokens.push({ type: "item", value: value.trimEnd(), at, end });
+    tokens.push({ type, value: value.trimEnd(), at, end });
   }
 
   while (index < chars.length) {
@@ -109,7 +110,12 @@ export function tokenize(source: string): Token[] {
       advance();
       tokens.push({ type: "newline", value: "\n", at, end: here() });
     } else if (starting && char === "-" && (peek(1) === undefined || peek(1) === "\n" || blank(peek(1)))) {
-      item(at);
+      item(at, "item");
+    } else if (starting && char === "{") {
+      advance();
+      tokens.push({ type: "open", value: "{", at, end: here() });
+    } else if (starting && char === "}") {
+      item(at, "close");
     } else if (arrow > 0) {
       let value = "";
       for (let n = 0; n < arrow; n++) value += advance();

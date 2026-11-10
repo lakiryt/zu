@@ -55,6 +55,7 @@ export type {
   SourcePosition,
   Spot,
   Statement,
+  TreeBrace,
   TreeItem,
 } from "./syntax/ast.ts";
 
@@ -72,6 +73,7 @@ export type {
   Point,
   Scene,
   Tail,
+  TreeBraceShape,
   TreeNode,
 } from "./layout/layout.ts";
 

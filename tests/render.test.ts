@@ -547,3 +547,28 @@ test("a tree is placed like other shapes by the center of its outline", () => {
   close(t!.cy, t!.y + t!.height / 2);
   assert.match(render("tree t\n- 1\n  - 2\n"), /<g data-id="t"><path d="M[^"]+"[^>]*\/><text text-anchor="start"/);
 });
+
+test("a brace spans the rows of what it encloses and stands right of the rightmost of them", () => {
+  const { shape, nodes } = treeNodes("tree t\n- 1\n  {\n  - a\n  - b\n  } X\n  - c\n    - 長い長い項目\n");
+  if (shape.geometry.shape !== "tree") throw new Error();
+  const [brace] = shape.geometry.braces;
+  // a と b の段に掛かり、長い項目(c の枝)ではなく b の右に置く
+  close(brace!.top, nodes["a"]!.y);
+  close(brace!.bottom, nodes["b"]!.y + nodes["b"]!.height);
+  close(brace!.x, Math.max(nodes["a"]!.x + nodes["a"]!.width, nodes["b"]!.x + nodes["b"]!.width) + 6);
+  assert.ok(brace!.x < nodes["長い長い項目"]!.x + nodes["長い長い項目"]!.width);
+  // 文は括弧の右、真ん中の高さ
+  close(nodes["X"]!.x, brace!.x + brace!.width + 6);
+  close(middle(nodes["X"]!), (brace!.top + brace!.bottom) / 2);
+});
+
+test("an outer brace stands right of the inner braces and their text, and descendants count", () => {
+  const { shape, nodes } = treeNodes("tree t\n{\n- a\n  {\n  - i\n  - ii\n  } 内側の説明\n- b\n} 外\n");
+  if (shape.geometry.shape !== "tree") throw new Error();
+  const [inner, outer] = shape.geometry.braces;
+  assert.ok(outer!.x > nodes["内側の説明"]!.x + nodes["内側の説明"]!.width);
+  assert.ok(outer!.top <= inner!.top && outer!.bottom >= nodes["b"]!.y + nodes["b"]!.height - 1e-9);
+  // 括弧と文も木の外枠に入る
+  close(shape.box.width, nodes["外"]!.x + nodes["外"]!.width);
+  assert.match(render("tree t\n{\n- a\n}\n"), /<path d="M[^"]*Q[^"]*"/);
+});

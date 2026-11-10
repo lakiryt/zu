@@ -344,7 +344,8 @@ export function createPanel(panel: HTMLElement, editor: Editor) {
         if (parsed?.kind !== "shape" || !parsed.items || rest.length > 0) {
           return editor.say("項目は「- 文字」の行で書きます");
         }
-        change({ items: parsed.items });
+        // 括弧を消したときに古い括弧を残さないよう、ないときも書く
+        change({ items: parsed.items, braces: parsed.braces });
       } catch (error) {
         if (!(error instanceof ZuError)) throw error;
         editor.say(error.line > 1 ? `項目の${error.line - 1}行目: ${error.reason}` : "項目を「- 文字」の形で1つ以上書きます");

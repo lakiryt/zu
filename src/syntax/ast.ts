@@ -20,8 +20,14 @@ export type Placement =
   // gap が null なら既定の間を使う
   | { kind: "beside"; direction: Direction; of: string; gap: number | null; at: SourcePosition };
 
-// 木(tree)の項目。「- 文字」の行で、字下げの深い行はその前の浅い行の子になる
-export type TreeItem = { label: string; children: TreeItem[]; at: SourcePosition };
+// 木の兄弟の項目を右から括る括弧(「{」と「}」の行で挟む)。first から last までの兄弟を括り(番号は0から、両端を含む)、
+// label を括弧の右に書く(null なら括弧だけ)。at は「{」の位置。
+// 入れ子の括弧は、閉じた順(内側が先)に並べる
+export type TreeBrace = { first: number; last: number; label: string | null; at: SourcePosition };
+
+// 木(tree)の項目。「- 文字」の行で、字下げの深い行はその前の浅い行の子になる。
+// braces は子にかける括弧(なければ省く)
+export type TreeItem = { label: string; children: TreeItem[]; braces?: TreeBrace[]; at: SourcePosition };
 
 export type ShapeStatement = {
   kind: "shape";
@@ -33,6 +39,8 @@ export type ShapeStatement = {
   size: Size | null;
   // tree の項目(上の段から。tree のときだけ、1つ以上)
   items?: TreeItem[];
+  // tree の上の段の項目にかける括弧(なければ省く)
+  braces?: TreeBrace[];
   at: SourcePosition;
   // 文の最後の字句の直後(行末のコメントは含まない)。tree は最後の項目の直後
   end: SourcePosition;

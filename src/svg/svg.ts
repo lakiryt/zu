@@ -98,12 +98,33 @@ function drawShape({ label: content, box, geometry }: PlacedShape) {
         .map(([a, b]) => `M${round(x + a.x)},${round(y + a.y)} L${round(x + b.x)},${round(y + b.y)}`)
         .join(" ");
       const lines = d === "" ? "" : `<path d="${d}" fill="none" stroke="${STROKE}" stroke-width="${STROKE_WIDTH.solid}" stroke-linecap="round"/>`;
+      const braces = geometry.braces.map((brace) =>
+        `<path d="${bracePath(x + brace.x, y + brace.top, y + brace.bottom, brace.width)}" fill="none" stroke="${STROKE}" stroke-width="${STROKE_WIDTH.solid}" stroke-linecap="round" stroke-linejoin="round"/>`,
+      );
       const items = geometry.nodes.map(({ label: item, box: node }) =>
         text(item, x + node.x, y + node.y + node.height / 2, "left"),
       );
-      return [lines, ...items].join("");
+      return [lines, ...braces, ...items].join("");
     }
   }
+}
+
+// 右へ張り出す波括弧「}」。左端 x から、上端 top と下端 bottom を結び、真ん中で x + width まで尖らせる。
+// 縦の線は張り出しの半分の所を通し、両端と真ん中の折れ目は弧で丸める
+function bracePath(x: number, top: number, bottom: number, width: number) {
+  const middle = (top + bottom) / 2;
+  const stem = x + width / 2;
+  const r = Math.min(width / 2, (bottom - top) / 4);
+  const p = (px: number, py: number) => `${round(px)},${round(py)}`;
+  return [
+    `M${p(x, top)}`,
+    `Q${p(stem, top)} ${p(stem, top + r)}`,
+    `L${p(stem, middle - r)}`,
+    `Q${p(stem, middle)} ${p(x + width, middle)}`,
+    `Q${p(stem, middle)} ${p(stem, middle + r)}`,
+    `L${p(stem, bottom - r)}`,
+    `Q${p(stem, bottom)} ${p(x, bottom)}`,
+  ].join(" ");
 }
 
 // tip に向かう向き u の矢先。線をどれだけ手前で止めるか(back)も返す。

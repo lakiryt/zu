@@ -355,3 +355,12 @@ test("a tree is edited as one statement with its item lines", () => {
   assert.equal(edit.rename(text, document, "a", "本人"), "text 本人\ntree t below of 本人\n- 1\n  - 2 %% 注\ntext b\n");
   assert.equal(removeShape(text, "t").includes("- "), false);
 });
+
+test("a tree keeps its braces when it is rewritten, and loses them when they are taken out", () => {
+  const text = "tree t\n{\n- 1\n- 2\n} 説明\n";
+  const document = parse(text);
+  const t = edit.findShape(document, "t")!;
+  assert.equal(edit.replaceShape(text, document, { ...t, label: "根" }), 'tree t "根"\n{\n- 1\n- 2\n} 説明\n');
+  assert.equal(edit.replaceShape(text, document, { ...t, braces: undefined }), "tree t\n- 1\n- 2\n");
+  assert.equal(removeShape(text, "t").trim(), "");
+});

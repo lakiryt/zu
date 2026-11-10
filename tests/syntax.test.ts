@@ -334,3 +334,36 @@ test("printing a tree gives back its items, quoting what would read otherwise", 
   assert.equal(printed, 'tree t "根" right of a\n- 1\n  - " a"\n  - "b\\nc"\n- d\n- "f %% g"');
   assert.deepEqual(outline((parse(printed).statements[0] as ShapeStatement).items!), outline((tree as ShapeStatement).items!));
 });
+
+test("braces enclose following siblings, nest, and keep the text after the closing one", () => {
+  const source = 'tree t\n{\n- a\n- b\n} 共通 %% 注\n- c\n  {\n  {\n  - i\n  } 内\n  - ii\n  } "外\\n側"\n';
+  const [tree] = parse(source).statements as ShapeStatement[];
+  const position = { line: 2, column: 1 };
+  assert.deepEqual(tree!.braces, [{ first: 0, last: 1, label: "共通", at: position }]);
+  assert.deepEqual(
+    tree!.items![2]!.braces!.map(({ first, last, label }) => [first, last, label]),
+    [
+      [0, 0, "内"],
+      [0, 1, "外\n側"],
+    ],
+  );
+  assert.equal(tree!.items![0]!.braces, undefined);
+  assert.deepEqual(tree!.end, { line: 12, column: 11 });
+  // 書き戻すと同じ括弧になる(コメントは消える)
+  const printed = print(tree!);
+  assert.equal(printed, 'tree t\n{\n- a\n- b\n} 共通\n- c\n  {\n  {\n  - i\n  } 内\n  - ii\n  } "外\\n側"');
+  assert.equal(print(parse(printed).statements[0]!), printed);
+  // 文のない括弧
+  assert.equal((parse("tree t\n{\n- a\n}\n").statements[0] as ShapeStatement).braces![0]!.label, null);
+});
+
+test("braces must enclose items of one parent at their depth", () => {
+  assertError("text a\n{\n", 2, 1, /tree の項目の行の間/);
+  assertError("tree t\n{\n- a\n", 2, 1, /閉じていません/);
+  assertError("tree t\n- a\n  {\n  - b\n- c\n", 3, 3, /閉じていません/);
+  assertError("tree t\n- a\n}\n", 3, 1, /開いた括弧/);
+  assertError("tree t\n- a\n{\n}\n", 3, 1, /中に項目がありません/);
+  assertError("tree t\n- a\n  {\n    - b\n  }\n", 4, 5, /括弧.*合いません/);
+  assertError("tree t\n- a\n  {\n  - b\n- c\n  - d\n  }\n", 3, 3, /閉じていません/);
+  assertError("tree t\n{ x\n- a\n}\n", 2, 3, /「\{」の行/);
+});

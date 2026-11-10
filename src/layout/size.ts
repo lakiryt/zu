@@ -3,7 +3,7 @@ import type { Scale, ShapeStatement } from "../syntax/ast.ts";
 import type { Box, Point } from "./geometry.ts";
 import { measureText } from "./measure.ts";
 import { layoutTree } from "./tree.ts";
-import type { TreeNode } from "./tree.ts";
+import type { TreeBraceShape, TreeNode } from "./tree.ts";
 
 // 図形ごとの描き方に要る寸法。外枠の中のどこに何を描くかは svg 側で決める
 export type Geometry =
@@ -11,8 +11,8 @@ export type Geometry =
   | { shape: "parallelogram"; skew: number }
   // 立方体は外枠の上部に描き、ラベルがあればその下に置く。labelTop は外枠の上端からラベルの上端まで
   | { shape: "cube"; edge: number; depth: number; labelTop: number }
-  // 木は、項目の字の外枠と線を、外枠の左上からの位置で持つ(根のラベルも項目の一つとして入る)
-  | { shape: "tree"; nodes: TreeNode[]; strokes: [Point, Point][] };
+  // 木は、項目の字の外枠、線、括弧を、外枠の左上からの位置で持つ(根のラベルと括弧の文も字の一つとして入る)
+  | { shape: "tree"; nodes: TreeNode[]; strokes: [Point, Point][]; braces: TreeBraceShape[] };
 
 // 大きさの語ごとの寸法。書かなければ medium。平行四辺形は高さと最小の幅、立方体は正面の一辺
 const PARALLELOGRAM_SCALES: Record<Scale, { height: number; minWidth: number }> = {
@@ -65,8 +65,8 @@ export function sizeOf(statement: ShapeStatement): Sized {
     }
 
     case "tree": {
-      const { width, height, nodes, strokes } = layoutTree(label, statement.items ?? []);
-      return { width, height, anchorTop: height / 2, geometry: { shape: "tree", nodes, strokes } };
+      const { width, height, nodes, strokes, braces } = layoutTree(label, statement.items ?? [], statement.braces);
+      return { width, height, anchorTop: height / 2, geometry: { shape: "tree", nodes, strokes, braces } };
     }
   }
 }
