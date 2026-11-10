@@ -20,10 +20,10 @@ a ===>> c "効果帰属"
 GitHub から入れる。入れるときに `dist/` へ JS と型定義を書き出す(`prepare`)。実行時の依存はなく、Node でもブラウザでも動く。
 
 ```
-npm install github:lakiryt/zu#v0.5.1
+npm install github:lakiryt/zu#v0.6.0
 ```
 
-`#v0.5.1` のように版(タグ)を指して入れる。指さないと master の最新が入り、書き方や見た目の変更が知らないうちに届く。版ごとの変更は [CHANGELOG.md](CHANGELOG.md)、版の付け方は [docs/design/versioning.md](docs/design/versioning.md)。
+`#v0.6.0` のように版(タグ)を指して入れる。指さないと master の最新が入り、書き方や見た目の変更が知らないうちに届く。版ごとの変更は [CHANGELOG.md](CHANGELOG.md)、版の付け方は [docs/design/versioning.md](docs/design/versioning.md)。
 
 ```ts
 import { render, ZuError } from "zu";
